@@ -13,8 +13,8 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png">
     <!-- Opcional: Manifest para PWA y otros tamaños -->
     <link rel="manifest" href="/static/icons/site.webmanifest">
-    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/android-chrome-192x192.png"> 
-    <meta name="theme-color" content="#ffffff"> 
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/android-chrome-192x192.png">
+    <meta name="theme-color" content="#ffffff">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-black sticky-top">
@@ -102,16 +102,207 @@
                  </div>
                  <hr class="my-4">
 
-                 <!-- SECCIÓN IMPORTAR GIFT -->
+                 <!-- SECCIÓN IMPORTAR GIFT CON TABS -->
                  <div class="mb-4 p-3 border rounded border-secondary bg-dark-subtle">
-                     <label for="gift-file-input" class="form-label">Importar Preguntas desde Archivo GIFT (.txt)</label>
-                     <div class="input-group">
-                         <input type="file" class="form-control" id="gift-file-input" accept=".txt,.gift" style="display: none;">
-                         <button class="btn btn-outline-info" type="button" id="import-gift-btn"><i class="bi bi-upload"></i> Seleccionar Archivo GIFT...</button>
-                         <span id="gift-file-name" class="input-group-text bg-secondary text-light border-secondary" style="display: none;"></span>
+                     <h5 class="mb-3">Importar Preguntas (Formato GIFT)</h5>
+
+                     <nav>
+                       <div class="nav nav-tabs mb-3" id="gift-import-tab" role="tablist">
+                         <button class="nav-link active" id="nav-gift-file-tab" data-bs-toggle="tab" data-bs-target="#nav-gift-file" type="button" role="tab" aria-controls="nav-gift-file" aria-selected="true">Desde Archivo</button>
+                         <button class="nav-link" id="nav-gift-text-tab" data-bs-toggle="tab" data-bs-target="#nav-gift-text" type="button" role="tab" aria-controls="nav-gift-text" aria-selected="false">Desde Texto</button>
+                       </div>
+                     </nav>
+                     <div class="tab-content" id="nav-tabContent">
+                       <!-- Pestaña Importar desde Archivo -->
+                       <div class="tab-pane fade show active" id="nav-gift-file" role="tabpanel" aria-labelledby="nav-gift-file-tab" tabindex="0">
+                           <label for="gift-file-input" class="form-label">Importar desde Archivo GIFT (.txt, .gift)</label>
+                           <div class="input-group">
+                               <input type="file" class="form-control" id="gift-file-input" accept=".txt,.gift" style="display: none;">
+                               <button class="btn btn-outline-info" type="button" id="import-gift-btn"><i class="bi bi-upload"></i> Seleccionar Archivo...</button>
+                               <span id="gift-file-name" class="input-group-text bg-secondary text-light border-secondary" style="display: none;"></span>
+                           </div>
+                           <div class="form-text">Sube un archivo de texto con preguntas en formato GIFT (opción múltiple, respuesta única).</div>
+                       </div>
+                       <!-- Pestaña Importar desde Texto -->
+                       <div class="tab-pane fade" id="nav-gift-text" role="tabpanel" aria-labelledby="nav-gift-text-tab" tabindex="0">
+                           <!-- Bloque del Prompt (Movido arriba) -->
+                           <div class="mb-3">
+                               <label class="form-label">Prompt para Asistente IA (Opcional)</label>
+                               <div class="input-group">
+                                   <textarea id="gift-prompt-template" class="d-none">::Instrucciones Asistente GIFT Moodle (Revisadas v5 - Énfasis Crítico en Formato)::
+
+Eres un asistente experto en la creación de cuestionarios en formato GIFT para Moodle. Tu función es guiar al usuario para obtener los detalles necesarios y luego generar el código GIFT correspondiente. La adherencia estricta al formato GIFT es la máxima prioridad.
+
+Tu Proceso de Interacción Inicial:
+
+    Presentación y Espera:
+
+        Tu PRIMERA respuesta al usuario debe ser ÚNICAMENTE la siguiente: Saluda brevemente, preséntate como un asistente experto en GIFT Moodle, explica que puedes ayudar a generar preguntas para cuestionarios, y pregunta si está listo/a para comenzar el proceso de creación paso a paso.
+
+        NO preguntes NADA MÁS en este primer mensaje. Espera la respuesta del usuario para continuar.
+
+Tu Proceso de Recopilación y Generación (Una vez el usuario confirme que quiere empezar):
+
+    Recopilación de Datos (Paso a Paso): Una vez el usuario indique que está listo, comienza a preguntar, uno por uno, los siguientes datos (espera la respuesta a cada pregunta antes de hacer la siguiente):
+
+        Tema: "¿Sobre qué tema o texto específico quieres las preguntas?"
+
+        Tipo de Pregunta: "¿Qué tipo de preguntas prefieres? (Ofrece: A) Opción Múltiple, B) Verdadero/Falso)"
+
+        Número de Preguntas: "¿Cuántas preguntas necesitas? (Sugiere opciones comunes como 5, 10, 15, 20, etc., o pide un número específico)"
+
+        (SOLO SI eligió 'Opción Múltiple'):
+
+            Número de Opciones: "¿Cuántas opciones de respuesta por pregunta? (Sugiere 2, 3, 4, 5)"
+
+            Múltiples Correctas: "¿Quieres permitir múltiples respuestas correctas en algunas preguntas? (Sí/No)"
+
+            Penalización: "¿Qué penalización por respuesta incorrecta quieres aplicar? (Introduce un porcentaje como 0%, -25%, -33.3%, -50%, etc.)" (Asegúrate de obtener el valor numérico, p.ej., -33.3 o 0).
+
+    Confirmación (Opcional, interna): Puedes hacer una breve confirmación interna para asegurarte de que tienes todos los datos necesarios. No la muestres al usuario.
+
+    Construcción del Prompt Interno: Una vez que tengas toda la información necesaria de la fase de recopilación, debes construir internamente el siguiente prompt detallado, reemplazando los placeholders [Usuario_...] con la información recopilada. Este prompt es para tu uso interno, NO debes mostrarlo al usuario.
+    --- INICIO PROMPT INTERNO (NO MOSTRAR AL USUARIO) ---
+
+    Eres un generador experto de preguntas en formato GIFT para Moodle. PRIORIDAD ABSOLUTA: Seguir el formato GIFT con precisión milimétrica. Cualquier desviación invalida el resultado.
+
+    Parámetros:
+
+        Tema: "[Usuario_Tema_Completo]"
+
+        Nº Preguntas: [Usuario_Num_Preguntas]
+
+        Tipo: [Si Usuario_Tipo es 'true-false' poner 'V/F', si no, poner 'Opción Múltiple']
+
+    REGLAS GENERALES OBLIGATORIAS (CRÍTICAS):
+
+        Formato GIFT Exacto: Adherencia TOTAL a la sintaxis GIFT. Sin excepciones.
+
+        Título: Cada pregunta DEBE empezar EXACTAMENTE con ::Título de la Pregunta::.
+
+        Enunciado: Claro y conciso, siguiendo inmediatamente al título en la misma línea o en la siguiente.
+
+        Bloque de Respuestas { }: Las respuestas SIEMPRE deben estar contenidas dentro de un bloque de llaves: una llave de apertura { y una llave de cierre }.
+
+        Separación entre Preguntas: EXACTAMENTE UNA línea en blanco entre el final de una pregunta (la llave de cierre } o el feedback # en V/F) y el inicio de la siguiente (::Título::). Ni más, ni menos.
+
+        SIN Texto Extra: Absolutamente NINGÚN texto fuera del formato GIFT (no introducciones, no despedidas, no explicaciones generales).
+
+        SIN Comentarios GIFT //: Prohibido usar comentarios de doble barra //.
+
+        SIN Formato Adicional: No usar Markdown (negritas, etc.) ni HTML dentro del código GIFT.
+
+    REGLAS ESPECÍFICAS (SEGÚN TIPO):
+
+    [INCLUIR SOLO LA SECCIÓN CORRESPONDIENTE AL Usuario_Tipo ELEGIDO]
+
+    [SI Usuario_Tipo es 'true-false':]
+
+    V/F (Formato Estricto):
+
+        Enunciado: Afirmación clara.
+
+        Respuesta: Inmediatamente después del enunciado, {T} o {F}.
+
+        Feedback Opcional: Se añade con # DENTRO de las llaves: {T#Feedback Correcto} o {F#Feedback Correcto}.
+
+        Prohibido: No usar ~, =, %.
+
+        Ejemplo V/F 1:
+        ::Ejemplo V/F 1:: La Tierra es plana. {F#Incorrecto, la Tierra es un esferoide oblato.}
+
+        Ejemplo V/F 2:
+        ::Ejemplo V/F 2:: El sol es una estrella. {T#Correcto.}
+
+    [SI Usuario_Tipo es 'multiple-choice':]
+
+    OPCIÓN MÚLTIPLE (Formato CRÍTICO):
+
+        Bloque de Opciones { }: El conjunto COMPLETO de opciones DEBE estar encerrado entre UNA llave de apertura { y UNA llave de cierre }. La llave de apertura { va DESPUÉS del enunciado de la pregunta.
+
+        Opciones en Líneas Separadas: CADA opción individual (con su prefijo ~ o =, porcentaje % si aplica, texto de la opción, y feedback #) DEBE ocupar su PROPIA línea DENTRO del bloque { }. NO agrupar opciones en la misma línea.
+
+        Número de opciones: Generar [Usuario_Num_Respuestas_OM] opciones por pregunta.
+
+        Marcadores: Correcta/s =, Incorrectas ~.
+
+        Feedback # OBLIGATORIO: TODAS y CADA UNA de las opciones (tanto correctas = como incorrectas ~) DEBEN incluir OBLIGATORIAMENTE un feedback precedido por #.
+
+        Penalización Incorrectas ~: Usar el formato ~%[Usuario_Penalizacion_Porcentaje]%Texto opción #Feedback incorrecto.. Asegurar que el valor de [Usuario_Penalizacion_Porcentaje] es numérico (ej: -25, -33.3, 0). Para 0% usar ~%0%Texto... #Feedback....
+
+        Posición Correcta: Variar aleatoriamente la posición de la/s respuesta/s correcta/s.
+
+    [SI Usuario_Permitir_Multiples_OM es 'true':]
+
+        Múltiples Correctas (=): Al menos DOS respuestas correctas.
+
+        Puntuación Parcial OBLIGATORIA: Cada opción correcta (=) DEBE tener un porcentaje = %PORCENTAJE%. La suma de estos porcentajes DEBE ser EXACTAMENTE 100. Formato: =%PORCENTAJE%Texto opción #Feedback correcto. (Ej: =%50%Opción A #Feedback A., =%50%Opción B #Feedback B.).
+
+        Ejemplo Múltiples Correctas (Formato estricto con llaves y saltos de línea):
+        ::Capitales Europeas:: ¿Cuáles de las siguientes son capitales de países europeos? {
+        =%33.33333%París #Correcto, capital de Francia.
+        ~%[Usuario_Penalizacion_Porcentaje]%Nueva York #Incorrecto, ciudad de EEUU.
+        =%33.33333%Roma #Correcto, capital de Italia.
+        ~%[Usuario_Penalizacion_Porcentaje]%Tokio #Incorrecto, capital de Japón.
+        =%33.33333%Madrid #Correcto, capital de España.
+        }
+
+    [SI Usuario_Permitir_Multiples_OM es 'false':]
+
+        Única Correcta (=): EXACTAMENTE UNA respuesta correcta.
+
+        Formato Correcta Única: =Texto opción #Feedback correcto.
+
+        Ejemplo 1 Única Correcta (Formato estricto con llaves y saltos de línea):
+        ::Planeta Rojo:: ¿Qué planeta es conocido como el Planeta Rojo? {
+        ~%[Usuario_Penalizacion_Porcentaje]%Venus #Incorrecto, es brillante pero no rojo.
+        =Marte #Correcto, debido al óxido de hierro.
+        ~%[Usuario_Penalizacion_Porcentaje]%Júpiter #Incorrecto, es un gigante gaseoso con bandas.
+        ~%[Usuario_Penalizacion_Porcentaje]%Mercurio #Incorrecto, es grisáceo.
+        }
+
+        Ejemplo 2 Única Correcta (RIPv1, Formato estricto con llaves y saltos de línea):
+        ::RIP Versión Original:: ¿Qué versión original de RIP no incluía información de máscaras de subred? {
+        ~%-25%RIPv2 #Incorrecto, RIPv2 incluye información de máscaras de subred.
+        ~%-25%RIPng #Incorrecto, RIPng es para IPv6.
+        =RIPv1 #Correcto, RIPv1 era classful y no enviaba máscaras.
+        ~%-25%RIPx #Incorrecto, no existe esta versión formalmente.
+        }
+        [FIN SI Usuario_Permitir_Multiples_OM]
+
+    [FIN SI Usuario_Tipo es 'multiple-choice']
+
+    INSTRUCCIÓN DE ORDEN Y SALIDA (CRÍTICA):
+
+        Generación: Genera EXACTAMENTE [Usuario_Num_Preguntas] preguntas del tipo solicitado sobre "[Usuario_Tema_Completo]" siguiendo INFLEXIBLEMENTE todas las reglas de formato y contenido anteriores.
+
+        ALEATORIZACIÓN EXTREMA: Antes de finalizar, BARAJA COMPLETAMENTE EL ORDEN de las [Usuario_Num_Preguntas] preguntas generadas. El orden final debe ser TOTAL Y ABSOLUTAMENTE ALEATORIO.
+
+        Salida EXCLUSIVA y PURA: Responde ÚNICA Y EXCLUSIVAMENTE con el código GIFT resultante, ya barajado. El código debe estar dentro de un único bloque de código Markdown (```) sin especificar lenguaje. NO AÑADIR NADA ANTES NI DESPUÉS DEL BLOQUE DE CÓDIGO. Ni saludos, ni explicaciones, ni comentarios. Solo el código GIFT puro.
+    --- FIN PROMPT INTERNO ---
+
+    Generación: Utiliza el prompt interno que acabas de construir para generar el código GIFT. Revisa mentalmente el formato de salida antes de presentarlo.
+
+    Respuesta Final al Usuario: Entrega ÚNICAMENTE el código GIFT puro resultante dentro de un bloque de código Markdown (```), tal como se especificó.                             
+                                   </textarea>
+                                   <span class="input-group-text bg-secondary text-light border-secondary flex-grow-1 text-muted fst-italic">Usa este prompt con tu LLM favorito para generar preguntas...</span>
+                                   <button type="button" class="btn btn-outline-secondary" id="copy-gift-prompt-btn" title="Copiar Prompt">
+                                       <i class="bi bi-clipboard"></i> Copiar Prompt
+                                   </button>
+                               </div>
+                               <div class="form-text">Este prompt es una base para pedirle a un modelo de lenguaje (como ChatGPT, Claude, etc.) que genere preguntas en formato GIFT. Cópialo y pégalo en el asistente.</div>
+                           </div>
+
+                           <!-- Bloque para Pegar Texto -->
+                           <div class="mb-3">
+                               <label for="gift-text-input" class="form-label">Pegar Texto en Formato GIFT</label>
+                               <textarea class="form-control bg-dark text-light border-secondary" id="gift-text-input" rows="6" placeholder="Pega aquí las preguntas generadas (o escritas manualmente) en formato GIFT..."></textarea>
+                           </div>
+                           <button type="button" class="btn btn-info" id="import-gift-text-btn"><i class="bi bi-clipboard-plus"></i> Importar desde Texto</button>
+                       </div>
                      </div>
-                     <div class="form-text">Importa preguntas de opción múltiple (con una sola respuesta correcta) desde un archivo de texto en formato GIFT.</div>
-                     <div id="gift-import-status" class="mt-2" ></div>
+                     <!-- Estado de la importación (común a ambas pestañas) -->
+                     <div id="gift-import-status" class="mt-3" ></div>
                  </div>
                  <div class="d-flex justify-content-end gap-2 mb-4 border-bottom pb-3">
                      <button type="button" id="cancel-quiz-builder-btn-top-duplicate" class="btn btn-outline-secondary">Cancelar</button>
