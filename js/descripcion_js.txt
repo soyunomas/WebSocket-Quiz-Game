@@ -1,0 +1,187 @@
+Informe de Archivos JavaScript (QuizMaster Live Host)
+
+Este informe detalla la funcionalidad principal de cada archivo JavaScript proporcionado para la aplicación del anfitrión de QuizMaster Live.
+
+1. auth.js
+
+Propósito Principal: Gestionar la autenticación del anfitrión (inicio de sesión, registro - simulados) y el cierre de sesión.
+
+Funciones Clave:
+
+handleLogin(e): Maneja el envío del formulario de inicio de sesión. Realiza una simulación de validación (usuario "admin", contraseña "1234"). Si tiene éxito, guarda un token falso y el email en localStorage y variables globales (window.hostAuthToken, window.hostEmail), carga los quizzes (loadQuizzesFromStorage), y muestra la vista del dashboard (dashboard-view). Muestra errores si falla.
+
+handleRegister(e): Maneja el envío del formulario de registro. Realiza una simulación (muestra un alert), resetea el formulario y cambia a la vista de login pre-rellenando el email.
+
+toggleAuthForms(): Cambia la visibilidad entre los formularios de login y registro. Actualiza el título (auth-title) y el texto del enlace (toggle-auth-link) correspondientemente. Limpia los mensajes de error.
+
+handleLogout(): Cierra la conexión WebSocket si está abierta (window.hostWebSocket). Limpia el token y email de localStorage y las variables globales. Llama a resetHostState() para limpiar el estado del juego y muestra la vista de autenticación (auth-view). Resetea los formularios de autenticación.
+
+initAuth(): Se ejecuta al inicio. Obtiene referencias a los elementos del DOM relacionados con la autenticación (formularios, enlace de cambio, botón de logout) y les añade los event listeners necesarios para llamar a las funciones handleLogin, handleRegister, toggleAuthForms, y handleLogout.
+
+2. builder.js
+
+Propósito Principal: Controlar toda la interfaz y lógica del Creador/Editor de Cuestionarios ("Quiz Builder"). Esto incluye añadir/eliminar/editar preguntas y opciones manualmente, importar preguntas desde archivos formato GIFT, y reordenar preguntas mediante arrastrar y soltar (Drag & Drop).
+
+Funciones Clave:
+
+showInfoModal(message, title): Muestra un modal genérico de Bootstrap (definido en host.html) con un mensaje y título específicos. Útil para notificaciones o errores.
+
+openQuizBuilder(quiz = null): Abre la vista del constructor. Si se le pasa un objeto quiz, lo carga para edición (haciendo una copia profunda). Si no, prepara la vista para crear un quiz nuevo. Resetea el formulario, limpia el contenedor de preguntas, y añade un bloque de pregunta inicial si es necesario. Llama a enableDragAndDrop() y updateBuilderUIState().
+
+loadQuizForEditing(quizId): Busca un quiz por su ID en el array global window.quizzes y, si lo encuentra, llama a openQuizBuilder() para cargarlo en el editor. Muestra un modal de error si no lo encuentra.
+
+addQuestionBlock(questionData = null): Clona la plantilla HTML de pregunta (#question-template), la rellena con questionData si se proporciona (texto, límite de tiempo, opciones existentes), le asigna identificadores temporales y nombres de grupo de radio únicos, y la añade al contenedor de preguntas (#questions-container). Añade 2 opciones por defecto si es una pregunta nueva o si questionData no tiene opciones válidas.
+
+addOptionBlock(optionsContainer, radioGroupName, optionData = null): Clona la plantilla HTML de opción (#option-template), la rellena con optionData si se proporciona (texto, si es correcta), le asigna el radioGroupName correspondiente, y la añade al contenedor de opciones de una pregunta específica.
+
+updateBuilderUIState(questionBlock = null): Actualiza el estado (habilitado/deshabilitado) de los botones "Añadir Opción", "Eliminar Opción" y "Eliminar Pregunta". Considera reglas como: mínimo 2 opciones, máximo 4 opciones, mínimo 1 pregunta. Si se pasa questionBlock, solo actualiza ese; si no, actualiza todos.
+
+saveQuiz(e): Maneja el envío del formulario del constructor. Realiza una validación exhaustiva del título, cada pregunta (texto, tiempo), y cada opción (texto, exactamente una correcta por pregunta). Si es válido, construye el objeto quizData, le asigna un ID nuevo o existente, y lo guarda (simulado) en el array global window.quizzes y en localStorage (llamando a saveQuizzesToStorage de dashboard.js). Muestra feedback visual (spinner) durante el guardado simulado y redirige al dashboard al finalizar. Muestra errores de validación en un modal.
+
+handleFileSelect(event): Se activa cuando se selecciona un archivo en el input de tipo file para GIFT. Lee el contenido del archivo.
+
+resetGiftInput(): Limpia el input de archivo GIFT y el span que muestra el nombre del archivo.
+
+parseGIFT(text): Parsea una cadena de texto que se espera esté en formato GIFT. Extrae preguntas de opción múltiple (con una sola respuesta correcta), limpiando formato básico y escapes. Devuelve un array de objetos de pregunta listos para addQuestionBlock. Maneja títulos ::Título:: y bloques de respuesta {}. Ignora otros tipos de preguntas GIFT y bloques malformados.
+
+enableDragAndDrop(): (Re)asigna los listeners de eventos dragstart, dragover, dragleave, drop, dragend al contenedor de preguntas (#questions-container) para activar la funcionalidad de reordenar.
+
+handleDragStart(e): Inicia el arrastre cuando se hace clic y se mueve el "handle" (.drag-handle). Guarda la referencia al bloque de pregunta arrastrado (draggedQuestion) y aplica una clase visual (.dragging).
+
+handleDragOver(e): Previene el comportamiento por defecto y determina dónde se insertará el elemento. Muestra un placeholder visual (dropZone) antes o después del bloque sobre el que se está pasando el ratón.
+
+handleDragLeave(e): (Actualmente sin lógica explícita relevante aquí, podría usarse para quitar el dropZone si se sale del contenedor).
+
+handleDrop(e): Previene el comportamiento por defecto. Inserta el draggedQuestion en la posición marcada por el dropZone. Llama a removeDropZone().
+
+handleDragEnd(e): Limpia el estado de arrastre: quita la clase .dragging de draggedQuestion, resetea draggedQuestion a null, y llama a removeDropZone().
+
+removeDropZone(): Elimina el elemento visual placeholder (dropZone) del DOM.
+
+initBuilder(): Se ejecuta al inicio. Obtiene referencias a los elementos del DOM del constructor (vista, formulario, botones, input GIFT, contenedor de preguntas). Añade listeners para: "Añadir Pregunta", botones "Cancelar", envío del formulario (saveQuiz), click en botón "Importar GIFT", cambio en input de archivo (handleFileSelect). Utiliza delegación de eventos en la vista del constructor para manejar clicks en los botones "Añadir Opción", "Eliminar Opción", "Eliminar Pregunta" que se crean dinámicamente. Llama a enableDragAndDrop() inicialmente.
+
+3. dashboard.js
+
+Propósito Principal: Gestionar la vista principal del anfitrión después de iniciar sesión: mostrar la lista de cuestionarios creados y permitir iniciar una partida, editar o eliminar un cuestionario.
+
+Funciones Clave:
+
+loadQuizzesFromStorage(): Carga la lista de cuestionarios guardada en localStorage (clave hostQuizzes) en la variable global window.quizzes. Si no hay quizzes guardados o hay un error al parsear, crea datos de ejemplo y los guarda. Llama a renderQuizList() para mostrar los quizzes.
+
+saveQuizzesToStorage(): Guarda el contenido actual del array global window.quizzes en localStorage (como una cadena JSON).
+
+setupDeleteConfirmation(quizId, quizTitle): Prepara y muestra el modal de confirmación de Bootstrap (#confirmDeleteQuizModal) antes de eliminar un quiz. Rellena el nombre del quiz en el modal y almacena el quizId en un atributo data-* del botón de confirmación.
+
+performQuizDeletion(quizId): Ejecuta la eliminación real del quiz. Filtra el quiz con el quizId dado del array window.quizzes, guarda el array actualizado llamando a saveQuizzesToStorage(), y actualiza la interfaz llamando a renderQuizList().
+
+renderQuizList(): Limpia el contenedor de la lista de quizzes (#quiz-list) y lo reconstruye dinámicamente iterando sobre el array window.quizzes. Para cada quiz, crea un elemento de lista con el título, número de preguntas y botones de acción ("Iniciar", "Editar", "Eliminar"). Añade los event listeners correspondientes a cada botón (llaman a initiateGame, loadQuizForEditing, setupDeleteConfirmation). Muestra u oculta el mensaje "No has creado ningún cuestionario..." según si la lista está vacía.
+
+initDashboard(): Se ejecuta al inicio. Obtiene referencias a elementos del dashboard (botón "Crear Nuevo Quiz", botón de confirmación en el modal de eliminar) y les añade event listeners. El listener del botón "Crear" llama a openQuizBuilder(). El listener del botón de confirmación de eliminación llama a performQuizDeletion() usando el quizId guardado.
+
+4. game.js
+
+Propósito Principal: Manejar toda la lógica y la interfaz del lado del anfitrión durante una partida en vivo. Esto incluye crear la partida, gestionar la conexión WebSocket, mostrar el lobby, avanzar por las preguntas, mostrar el temporizador, la tabla de clasificación (leaderboard) y los resultados finales.
+
+Funciones Clave:
+
+initiateGame(quizId): Inicia el proceso de creación de una partida. Busca el quiz por quizId en window.quizzes. Llama a resetHostState() para limpiar estados anteriores. Realiza una llamada fetch al backend (/create_game/) para obtener un game_code. Si tiene éxito, guarda el código en window.currentGameCode, muestra la vista del lobby (host-lobby-view) y llama a connectHostWebSocket() para establecer la conexión. Maneja errores en la creación.
+
+createWaitingIndicatorHTML(): Función auxiliar que devuelve el HTML para el mensaje "Esperando jugadores..." en el lobby.
+
+connectHostWebSocket(gameCode): Establece la conexión WebSocket con el backend en la URL /ws/{gameCode}. Configura los manejadores de eventos:
+
+onopen: Envía los comandos join_game (para identificarse como host) y load_quiz_data (enviando los datos del window.currentQuizForGame) al backend.
+
+onmessage: Parsea el mensaje JSON recibido y lo pasa a handleHostWebSocketMessage().
+
+onerror: Muestra un error y cierra la conexión.
+
+onclose: Limpia el estado (si el cierre no fue esperado/normal) y redirige al dashboard.
+
+handleHostWebSocketMessage(message): El "cerebro" que procesa los mensajes recibidos del backend. Usa un switch sobre message.type para determinar la acción:
+
+join_ack, player_joined, player_left: Actualizan la lista de jugadores en el lobby (addPlayerToLobby, removePlayerFromLobby) y el contador (updatePlayerCount).
+
+quiz_loaded_ack: Confirma que el backend recibió y procesó el quiz. Actualiza el estado (window.isQuizDataLoaded) y habilita el botón "Empezar Juego" si hay jugadores.
+
+game_started: Cambia a la vista de juego en vivo (host-game-view).
+
+new_question: Recibe los datos de la nueva pregunta, los guarda en window.currentQuestionData, actualiza la UI con el texto, opciones, número de pregunta (displayHostQuestion), y limpia el leaderboard.
+
+update_scoreboard: Recibe la tabla de puntuaciones actualizada, detiene el timer, y muestra el leaderboard (updateLeaderboard). Habilita el botón "Siguiente".
+
+game_over: Recibe los resultados finales, detiene timers, muestra el podio final (displayHostFinalPodium), cambia a la vista final (host-end-view), y cierra la conexión WebSocket.
+
+error: Muestra mensajes de error del servidor. Puede cancelar el juego si el error es crítico (ej. error al cargar quiz).
+
+info: Mensajes informativos (actualmente no hacen mucho).
+
+addPlayerToLobby(nickname): Añade el nickname de un jugador a la lista visual del lobby (#player-list-lobby). Ignora al host. Limpia el mensaje "Esperando jugadores..." si es el primero. Actualiza window.currentPlayers.
+
+removePlayerFromLobby(nickname): Elimina el nickname de un jugador de la lista visual del lobby. Actualiza window.currentPlayers. Si no quedan jugadores, vuelve a mostrar "Esperando jugadores...".
+
+updatePlayerCount(backendPlayerCount): Actualiza el contador visual de jugadores (#player-count) basado en Object.keys(window.currentPlayers).length. Habilita/deshabilita el botón "Empezar Juego" (#start-game-btn) dependiendo de si window.isQuizDataLoaded es true y si hay jugadores.
+
+sendHostCommand(commandType, data = {}): Función auxiliar para enviar mensajes JSON al backend a través del WebSocket. Verifica si la conexión está abierta antes de enviar.
+
+displayHostQuestion(questionPayload): Actualiza la interfaz para mostrar la pregunta actual: número de pregunta, texto, opciones (marca la correcta para el anfitrión), y llama a startHostTimer().
+
+startHostTimer(duration): Inicia y actualiza el temporizador visual (barra de progreso #timer-bar) para la pregunta actual. Usa setInterval. Cambia de color cuando queda poco tiempo.
+
+updateLeaderboard(leaderboardData): Actualiza la lista del leaderboard (#leaderboard) con el top 5 jugadores recibidos del servidor.
+
+displayHostFinalPodium(podiumData): Rellena la lista del podio final (#final-podium-list-host) con los resultados recibidos del servidor, añadiendo medallas.
+
+cancelGame(confirmNeeded = true): Cancela la partida (usualmente desde el lobby). Pide confirmación si confirmNeeded es true. Cierra el WebSocket, llama a resetHostState() y muestra el dashboard.
+
+initGameControls(): Se ejecuta al inicio. Obtiene referencias a elementos de control del juego (botones Start, Cancel, Next, End, Back, display de código) y modales. Añade event listeners:
+
+#start-game-btn: Llama a sendHostCommand('start_game').
+
+#cancel-lobby-btn: Llama a cancelGame(true).
+
+#game-code-display: Llama a copyGameCode() (de utils.js).
+
+#next-question-btn: Llama a sendHostCommand('next_question').
+
+#end-game-btn: Muestra el modal de confirmación (#confirmEndGameModal).
+
+#confirmEndGameBtn (dentro del modal): Llama a sendHostCommand('end_game') y cierra el modal.
+
+#back-to-dashboard-btn: Llama a resetHostState(), loadQuizzesFromStorage() y showView('dashboard-view').
+
+Inicializa la instancia del modal de Bootstrap para #confirmEndGameModal.
+
+5. main.js
+
+Propósito Principal: Punto de entrada de la aplicación. Inicializa todos los demás módulos y decide qué vista mostrar inicialmente basándose en el estado de autenticación guardado. Declara las variables globales compartidas.
+
+Contenido Clave:
+
+Variables Globales: Declara (asignando a window o simplemente let/const en el scope global del script) las variables que necesitan ser compartidas entre módulos: hostWebSocket, hostAuthToken, hostEmail, quizzes, currentQuizForBuilder, currentQuizForGame, currentGameCode, questionTimerInterval, currentQuestionIndex, totalQuestionsInGame, currentQuestionData, currentPlayers, isQuizDataLoaded. Lee los valores iniciales de hostAuthToken y hostEmail desde localStorage.
+
+Listener DOMContentLoaded: Se ejecuta cuando el HTML está completamente cargado. Dentro de este listener:
+
+Llama a las funciones de inicialización de cada módulo: initAuth(), initDashboard(), initBuilder(), initGameControls(). Esto asegura que todos los event listeners estén configurados.
+
+Verifica si hostAuthToken y hostEmail tienen valores (es decir, si el usuario ya estaba logueado).
+
+Si está logueado, llama a loadQuizzesFromStorage() (para tener los datos listos) y showView('dashboard-view').
+
+Si no está logueado, llama a showView('auth-view').
+
+6. utils.js
+
+Propósito Principal: Contener funciones de utilidad reutilizables en diferentes partes de la aplicación, principalmente relacionadas con la manipulación de la interfaz de usuario (UI) y el reseteo del estado.
+
+Funciones Clave:
+
+showView(viewId): Controla qué "vista" (sección principal <section> dentro de <main>) es visible. Oculta todas las secciones y luego muestra solo la que tiene el id igual a viewId. Además, gestiona la visibilidad del botón "Cerrar Sesión" (#logout-button) y del email del host (#host-email-display) en la barra de navegación: los muestra si la vista no es auth-view (y si hay un email), y los oculta si es auth-view.
+
+displayError(elementId, message, isSuccess = false): Muestra un mensaje en el elemento del DOM con el id especificado. Establece el textContent y cambia la clase CSS a text-danger (por defecto) o text-success (si isSuccess es true) para darle estilo. Útil para mostrar mensajes de error o de estado/éxito debajo de formularios o en áreas designadas.
+
+resetHostState(): Restablece el estado relacionado con una partida en curso a sus valores iniciales. Limpia variables globales como currentQuizForGame, currentGameCode, currentPlayers, isQuizDataLoaded, currentQuestionIndex, etc. Cierra la conexión WebSocket si está abierta. Limpia el intervalo del timer (questionTimerInterval). Restablece elementos de la UI del juego/lobby a su estado por defecto (lista de jugadores, leaderboard, código de partida, botones deshabilitados, etc.). Importante: No resetea el estado de autenticación (hostAuthToken, hostEmail).
+
+copyGameCode(): Se activa al hacer clic en el display del código de partida (#game-code-display). Si hay un código de partida válido (window.currentGameCode), utiliza la API navigator.clipboard.writeText() para copiarlo al portapapeles. Muestra un feedback visual temporal ("¡COPIADO!") en el propio elemento.
+
+Espero que este informe detallado te sea de gran utilidad. ¡Avísame si necesitas algo más!

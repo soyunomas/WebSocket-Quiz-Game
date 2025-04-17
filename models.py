@@ -1,127 +1,187 @@
 # models.py
+"""
+Define los modelos de datos Pydantic utilizados en la aplicación de Quiz.
+
+Incluye:
+- Estructuras de datos internas (como Game, Player, QuizData).
+- Enumeraciones (como GameStateEnum).
+- Payloads para la comunicación WebSocket entre cliente y servidor.
+"""
+
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
 from enum import Enum
-import time
-import uuid # Importar uuid para generar IDs si es necesario
+import uuid # Para generar IDs por defecto
 
-from fastapi import WebSocket # Importa WebSocket para usarlo como tipo
+from fastapi import WebSocket # Para tipar conexiones WebSocket
 
 # --- Modelos de Datos Internos ---
 
 class GameStateEnum(str, Enum):
-    LOBBY = "LOBBY"
-    QUESTION_DISPLAY = "QUESTION_DISPLAY"
-    LEADERBOARD = "LEADERBOARD"
-    FINISHED = "FINISHED"
+    """Enumeración para los posibles estados de una partida."""
+    LOBBY = "LOBBY"                     # Esperando jugadores, antes de empezar
+    QUESTION_DISPLAY = "QUESTION_DISPLAY" # Mostrando una pregunta, esperando respuestas
+    LEADERBOARD = "LEADERBOARD"           # Mostrando el marcador después de una pregunta
+    FINISHED = "FINISHED"                 # La partida ha terminado
 
-# Modelo para las opciones DENTRO de un QuizData
+# --- Modelos para Cargar Datos del Quiz (desde archivo/host) ---
+
 class OptionData(BaseModel):
-    id: Optional[str] = Field(default_factory=lambda: f"opt_{uuid.uuid4().hex[:6]}", description="ID único opcional")
+    """Representa una opción dentro de los datos brutos de un Quiz."""
+    id: Optional[str] = Field(default_factory=lambda: f"opt_{uuid.uuid4().hex[:6]}", description="ID único opcional; se generará si falta")
     text: str = Field(..., description="Texto de la opción")
-    is_correct: bool = Field(..., description="Indica si es la opción correcta")
+    is_correct: bool = Field(..., description="Indica si esta es la opción correcta")
 
-# Modelo para las preguntas DENTRO de un QuizData
 class QuestionData(BaseModel):
-    id: Optional[str] = Field(default_factory=lambda: f"q_{uuid.uuid4().hex[:8]}", description="ID único opcional")
+    """Representa una pregunta dentro de los datos brutos de un Quiz."""
+    id: Optional[str] = Field(default_factory=lambda: f"q_{uuid.uuid4().hex[:8]}", description="ID único opcional; se generará si falta")
     text: str = Field(..., description="Texto de la pregunta")
-    options: List[OptionData] = Field(..., min_length=2, max_length=4, description="Lista de opciones (2-4)")
-    time_limit: int = Field(default=20, ge=5, le=120, description="Tiempo límite en segundos (5-120)")
+    options: List[OptionData] = Field(..., min_length=2, max_length=4, description="Lista de opciones (entre 2 y 4)")
+    time_limit: int = Field(default=20, ge=5, le=120, description="Tiempo límite en segundos para responder (entre 5 y 120)")
 
-
-# Modelo para los datos del Quiz COMPLETO
 class QuizData(BaseModel):
-    id: Optional[str] = Field(default_factory=lambda: f"quiz_{uuid.uuid4().hex[:10]}", description="ID único opcional")
+    """Representa la estructura completa de un cuestionario cargado."""
+    id: Optional[str] = Field(default_factory=lambda: f"quiz_{uuid.uuid4().hex[:10]}", description="ID único opcional del quiz; se generará si falta")
     title: str = Field(..., description="Título del Quiz")
-    questions: List[QuestionData] = Field(..., description="Lista de preguntas")
+    questions: List[QuestionData] = Field(..., description="Lista de preguntas que componen el quiz")
 
+# --- Modelos Procesados/Utilizados Durante el Juego ---
 
-# --- Modelos Reusados de antes, pero verificados ---
-
-# Modelo para las opciones ENVIADAS a los jugadores (necesitan ID)
 class Option(BaseModel):
-    id: str = Field(..., description="Identificador único de la opción")
-    text: str = Field(..., description="Texto de la opción")
+    """Representa una opción tal como se envía a los jugadores (con ID garantizado)."""
+    id: str = Field(..., description="Identificador único de la opción, usado para las respuestas")
+    text: str = Field(..., description="Texto de la opción visible para el jugador")
 
-# Modelo para la pregunta ENVIADA a los jugadores (necesita ID)
 class Question(BaseModel):
+    """Representa una pregunta procesada, lista para ser usada/enviada en el juego."""
     id: str = Field(..., description="Identificador único de la pregunta")
     text: str = Field(..., description="Texto de la pregunta")
-    options: List[Option] = Field(..., description="Lista de opciones")
-    correct_answer_id: str = Field(..., description="ID de la opción correcta") # Internamente SI necesitamos este
+    options: List[Option] = Field(..., description="Lista de opciones (con IDs) para mostrar al jugador")
+    correct_answer_id: str = Field(..., description="ID de la opción correcta (usado internamente para validar)")
     time_limit: int = Field(default=15, description="Tiempo límite en segundos")
 
-
 class Player(BaseModel):
-    nickname: str
-    connection: WebSocket = Field(..., exclude=True)
-    score: int = 0
-    last_answer_time: Optional[float] = None
-    has_answered_current_question: bool = False
+    """Representa a un jugador conectado a una partida."""
+    nickname: str = Field(..., description="Nombre elegido por el jugador")
+    connection: WebSocket = Field(..., exclude=True, description="Referencia a la conexión WebSocket del jugador")
+    score: int = Field(default=0, description="Puntuación acumulada del jugador")
+    last_answer_time: Optional[float] = Field(default=None, description="Timestamp de la última respuesta enviada (para desempates o análisis)")
+    has_answered_current_question: bool = Field(default=False, description="Flag para indicar si ya respondió la pregunta actual")
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed = True # Permite el tipo WebSocket
 
 class AnswerRecord(BaseModel):
-    player_nickname: str
-    answer_id: str
-    received_at: float
-    score_awarded: int = 0
-    is_correct: bool = False
+    """Almacena información sobre la respuesta de un jugador a una pregunta específica."""
+    player_nickname: str = Field(..., description="Nickname del jugador que respondió")
+    answer_id: str = Field(..., description="ID de la opción seleccionada por el jugador")
+    received_at: float = Field(..., description="Timestamp (time.time()) de cuándo se recibió la respuesta")
+    score_awarded: int = Field(default=0, description="Puntos obtenidos por esta respuesta")
+    is_correct: bool = Field(default=False, description="Indica si la respuesta fue correcta")
 
 class Game(BaseModel):
-    game_code: str
-    host_connection: Optional[WebSocket] = Field(default=None, exclude=True)
-    quiz_data: Optional[QuizData] = None # Ahora es opcional
-    players: Dict[WebSocket, Player] = Field(default_factory=dict)
-    state: GameStateEnum = GameStateEnum.LOBBY
-    current_question_index: int = -1
-    question_start_time: Optional[float] = None
-    answers_received_this_round: Dict[str, AnswerRecord] = Field(default_factory=dict)
-    active_connections: List[WebSocket] = Field(default_factory=list, exclude=True)
-
-    # ****** CAMBIO REALIZADO AQUÍ ******
-    # Renombrar el campo eliminando el guion bajo inicial
-    current_correct_answer_id: Optional[str] = Field(default=None, exclude=True)
-    # ****** FIN DEL CAMBIO ******
+    """Representa el estado completo de una partida en curso."""
+    game_code: str = Field(..., description="Código único de 6 caracteres que identifica la partida")
+    host_connection: Optional[WebSocket] = Field(default=None, exclude=True, description="Conexión WebSocket del anfitrión (host)")
+    quiz_data: Optional[QuizData] = Field(default=None, description="Datos del cuestionario cargado para esta partida")
+    players: Dict[WebSocket, Player] = Field(default_factory=dict, description="Diccionario que mapea conexiones WebSocket a objetos Player")
+    state: GameStateEnum = Field(default=GameStateEnum.LOBBY, description="Estado actual de la partida (Lobby, Pregunta, Marcador, Finalizada)")
+    current_question_index: int = Field(default=-1, description="Índice de la pregunta actual dentro de quiz_data.questions")
+    question_start_time: Optional[float] = Field(default=None, description="Timestamp (time.time()) de cuándo se envió la pregunta actual")
+    answers_received_this_round: Dict[str, AnswerRecord] = Field(default_factory=dict, description="Registro de las respuestas recibidas para la pregunta actual (nickname -> AnswerRecord)")
+    active_connections: List[WebSocket] = Field(default_factory=list, exclude=True, description="Lista de todas las conexiones WebSocket activas en la partida (incluye host y jugadores)")
+    current_correct_answer_id: Optional[str] = Field(default=None, exclude=True, description="ID de la respuesta correcta para la pregunta actual (cacheada para rápido acceso)")
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed = True # Permite el tipo WebSocket
 
+# --- Modelos para Mensajes WebSocket (Protocolo Cliente <-> Servidor) ---
 
-# --- Modelos para Mensajes WebSocket (Protocolo) ---
+# --- Payloads Cliente -> Servidor ---
 
-# -> Servidor (Payloads de entrada)
-class JoinGamePayload(BaseModel): nickname: str
-class SubmitAnswerPayload(BaseModel): answer_id: str
+class JoinGamePayload(BaseModel):
+    """Payload para el mensaje 'join_game' enviado por un jugador."""
+    nickname: str = Field(..., description="Nickname que el jugador desea usar")
 
-# --- Payloads Client -> Server ---
-class StartGamePayload(BaseModel): pass
-class NextQuestionPayloadInput(BaseModel): pass
-class EndGamePayloadInput(BaseModel): pass
+class SubmitAnswerPayload(BaseModel):
+    """Payload para el mensaje 'submit_answer' enviado por un jugador."""
+    answer_id: str = Field(..., description="ID de la opción que el jugador seleccionó")
 
-# --- Payloads Server -> Client ---
-class JoinAckPayload(BaseModel): nickname: str; message: str
-class PlayerJoinedPayload(BaseModel): nickname: str; player_count: int
-class PlayerLeftPayload(BaseModel): nickname: str; player_count: int
-class GameStartedPayload(BaseModel): pass
-class NewQuestionPayload(BaseModel): # Usa el modelo Option que tiene ID
-    question_id: str
-    question_text: str
-    options: List[Option] # Envía opciones con ID
-    time_limit: int
-    question_number: int
-    total_questions: int
+# Los siguientes payloads son solo marcadores de tipo, no llevan datos
+class StartGamePayload(BaseModel):
+    """Payload (vacío) para el mensaje 'start_game' enviado por el host."""
+    pass
+class NextQuestionPayloadInput(BaseModel):
+    """Payload (vacío) para el mensaje 'next_question' enviado por el host."""
+    pass
+class EndGamePayloadInput(BaseModel):
+    """Payload (vacío) para el mensaje 'end_game' enviado por el host."""
+    pass
+
+# --- Payloads Servidor -> Cliente ---
+
+class JoinAckPayload(BaseModel):
+    """Payload para el mensaje 'join_ack' enviado al jugador que se une."""
+    nickname: str = Field(..., description="Nickname confirmado del jugador")
+    message: str = Field(..., description="Mensaje de bienvenida o estado")
+
+class PlayerJoinedPayload(BaseModel):
+    """Payload para el mensaje 'player_joined' broadcast a todos."""
+    nickname: str = Field(..., description="Nickname del jugador que se unió")
+    player_count: int = Field(..., description="Número total de jugadores actual")
+
+class PlayerLeftPayload(BaseModel):
+    """Payload para el mensaje 'player_left' broadcast a todos."""
+    nickname: str = Field(..., description="Nickname del jugador que se desconectó")
+    player_count: int = Field(..., description="Número total de jugadores restante")
+
+class GameStartedPayload(BaseModel):
+    """Payload (vacío) para el mensaje 'game_started' broadcast a todos."""
+    pass
+
+class NewQuestionPayload(BaseModel):
+    """Payload para el mensaje 'new_question' broadcast a todos."""
+    question_id: str = Field(..., description="ID único de la pregunta actual")
+    question_text: str = Field(..., description="Texto de la pregunta")
+    options: List[Option] = Field(..., description="Lista de opciones (con IDs) para mostrar")
+    time_limit: int = Field(..., description="Tiempo límite en segundos para responder")
+    question_number: int = Field(..., description="Número de la pregunta actual (empezando en 1)")
+    total_questions: int = Field(..., description="Número total de preguntas en el quiz")
+
 class AnswerResultPayload(BaseModel):
-    is_correct: bool
-    correct_answer_id: str # Envía el ID correcto
-    points_awarded: int
-    current_score: int
-    current_rank: int
-class ScoreboardEntry(BaseModel): rank: int; nickname: str; score: int
-class UpdateScoreboardPayload(BaseModel): scoreboard: List[ScoreboardEntry]
-class GameOverPayload(BaseModel): podium: List[ScoreboardEntry]
-class ErrorPayload(BaseModel): message: str; code: Optional[str] = None
+    """Payload para el mensaje 'answer_result' enviado al jugador que respondió."""
+    is_correct: bool = Field(..., description="Indica si la respuesta fue correcta")
+    correct_answer_id: str = Field(..., description="ID de la opción que era correcta")
+    points_awarded: int = Field(..., description="Puntos ganados por esta respuesta")
+    current_score: int = Field(..., description="Puntuación total actual del jugador")
+    current_rank: int = Field(..., description="Posición actual del jugador en el marcador")
 
-# Contenedor genérico
-class WebSocketMessage(BaseModel): type: str; payload: Optional[Any] = None
+class ScoreboardEntry(BaseModel):
+    """Representa una entrada individual en el marcador."""
+    rank: int = Field(..., description="Posición del jugador (1 es el primero)")
+    nickname: str = Field(..., description="Nickname del jugador")
+    score: int = Field(..., description="Puntuación del jugador")
+
+class UpdateScoreboardPayload(BaseModel):
+    """Payload para el mensaje 'update_scoreboard' broadcast a todos."""
+    scoreboard: List[ScoreboardEntry] = Field(..., description="Lista ordenada de jugadores y sus puntuaciones")
+
+class GameOverPayload(BaseModel):
+    """Payload para el mensaje 'game_over' broadcast a todos."""
+    podium: List[ScoreboardEntry] = Field(..., description="Los 3 mejores jugadores (o menos si hay menos jugadores)")
+
+class ErrorPayload(BaseModel):
+    """Payload para mensajes de 'error' enviados a un cliente específico o broadcast."""
+    message: str = Field(..., description="Descripción del error")
+    code: Optional[str] = Field(default=None, description="Código opcional para identificar el tipo de error (ej: 'INVALID_GAME_CODE')")
+
+class WebSocketMessage(BaseModel):
+    """Estructura estándar para todos los mensajes WebSocket."""
+    type: str = Field(..., description="Tipo de mensaje (ej: 'join_game', 'new_question')")
+    payload: Optional[Any] = Field(default=None, description="Datos asociados al mensaje, varía según el tipo")
+
+class GameOverPayload(BaseModel):
+    """Payload para el mensaje 'game_over' enviado a cada jugador."""
+    podium: List[ScoreboardEntry] = Field(..., description="Los 3 mejores jugadores (o menos si hay menos jugadores, excluyendo al host)")
+    my_final_rank: Optional[int] = Field(default=None, description="El rango final específico de este jugador entre todos los jugadores (excluyendo host)")
+    my_final_score: Optional[int] = Field(default=None, description="La puntuación final específica de este jugador")
