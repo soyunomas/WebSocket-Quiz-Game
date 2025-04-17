@@ -26,8 +26,8 @@ Este proyecto permite a un "Anfitrión" crear cuestionarios de opción múltiple
     *   Añadir/eliminar opciones de respuesta (2-4 por pregunta).
     *   Marcar la respuesta correcta.
     *   Establecer límite de tiempo por pregunta.
-    *   Reordenar preguntas mediante Drag & Drop.
-*   **📄 Importación GIFT (Host):** Carga preguntas de opción múltiple desde archivos `.txt` en formato GIFT.
+    *   Reordenar preguntas mediante ⬆️⬇️.
+*   **📄 Importación GIFT (Host):** Carga preguntas de opción múltiple desde archivos `.txt o .gift` en formato GIFT.
 *   **🎮 Flujo de Juego (Host):**
     *   Iniciar partida y obtener código único.
     *   Ver jugadores unirse al lobby.
