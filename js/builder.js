@@ -319,8 +319,11 @@ function addQuestionBlock(questionData = null) {
     giftFileNameSpan = giftFileNameSpan || document.getElementById('gift-file-name');
     giftFileInput = giftFileInput || document.getElementById('gift-file-input'); // Needed for reset
     quizTitleInput = quizTitleInput || document.getElementById('quiz-title'); // To potentially set title
+    questionsContainer = questionsContainer || document.getElementById('questions-container'); // Needed for check
+    quizIdInput = quizIdInput || document.getElementById('quiz-id'); // Needed to check if creating new
 
-    if (!giftImportStatus || !giftFileNameSpan || !giftFileInput || !quizTitleInput) return;
+
+    if (!giftImportStatus || !giftFileNameSpan || !giftFileInput || !quizTitleInput || !questionsContainer || !quizIdInput) return;
 
     giftImportStatus.textContent = '';
     const file = event.target.files[0];
@@ -338,13 +341,45 @@ function addQuestionBlock(questionData = null) {
     reader.onload = (e) => {
          const fileContent = e.target.result;
          try {
-             const parsedQuestions = parseGIFT(fileContent);
+             const parsedQuestions = parseGIFT(fileContent); // parseGIFT debe retornar [] si no hay válidas
              if (parsedQuestions.length > 0) {
                  console.log(`Parsed ${parsedQuestions.length} GIFT questions.`);
-                 // Añadir al final del contenedor actual
+
+                 // --- INICIO DE LA LÓGICA CLAVE ---
+                 const isCreatingNewQuiz = !quizIdInput.value;
+                 const existingQuestionBlocks = questionsContainer.querySelectorAll('.question-block');
+                 let shouldClearInitialBlock = false;
+
+                 if (isCreatingNewQuiz && existingQuestionBlocks.length === 1) {
+                     // Comprobar si el único bloque existente está realmente vacío
+                     const firstQuestionText = existingQuestionBlocks[0].querySelector('.question-text');
+                     const firstOptionsContainer = existingQuestionBlocks[0].querySelector('.options-container');
+                     const firstOptions = firstOptionsContainer ? firstOptionsContainer.querySelectorAll('.option-text') : [];
+                     let firstOptionsAreEmpty = true;
+                     firstOptions.forEach(optInput => {
+                         if (optInput.value.trim() !== '') {
+                             firstOptionsAreEmpty = false;
+                         }
+                     });
+
+                     if (firstQuestionText && firstQuestionText.value.trim() === '' && firstOptionsAreEmpty) {
+                         console.log("Detected initial empty block while creating new quiz. Clearing before import.");
+                         shouldClearInitialBlock = true;
+                     }
+                 }
+
+                 if (shouldClearInitialBlock) {
+                     questionsContainer.innerHTML = ''; // Limpiar el bloque inicial vacío
+                 }
+                 // --- FIN DE LA LÓGICA CLAVE ---
+
+
+                 // Añadir las preguntas parseadas (al contenedor vacío o al final si no se limpió)
                  parsedQuestions.forEach(q => addQuestionBlock(q));
+
                  displayError('gift-import-status', `${parsedQuestions.length} pregunta(s) importada(s) correctamente. Revisa y guarda.`, true);
-                 // Si el título del quiz está vacío y el GIFT tenía título, usarlo
+
+                 // Si el título del quiz está vacío y el GIFT tenía título, usarlo (mantener)
                  if (!quizTitleInput.value.trim() && parsedQuestions[0]._giftTitle) {
                      quizTitleInput.value = parsedQuestions[0]._giftTitle;
                  }

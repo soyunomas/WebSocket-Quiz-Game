@@ -83,7 +83,6 @@ let quizListContainer, createQuizBtn, noQuizzesMessage;
      window.quizzes = window.quizzes.filter(q => q.id !== quizId);
      saveQuizzesToStorage(); // Guardar cambios en localStorage
      renderQuizList(); // Actualizar la lista
-     alert(`Cuestionario "${quizTitle}" eliminado.`);
  }
 
  function initDashboard() {
