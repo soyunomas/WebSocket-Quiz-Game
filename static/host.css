@@ -1,0 +1,151 @@
+/* Estilos personalizados */
+body {
+    background-color: #212529; /* Fondo oscuro Bootstrap */
+    padding-bottom: 3rem; /* Espacio al final */
+}
+/* Estilos para centrar contenido (si se usan en auth) */
+ #auth-view .row { min-height: 80vh; display: flex; align-items: center;}
+
+/* Otros estilos específicos */
+#game-code-display {
+    letter-spacing: 0.2em; /* Espaciado para el código */
+    font-size: 2.5rem; /* Más grande */
+    background-color: #495057 !important; /* Un poco más claro */
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem; /* Bootstrap's default rounded */
+    display: inline-block; /* Para que el padding funcione bien */
+    min-width: 200px; /* Ancho mínimo */
+    margin-bottom: 1.5rem; /* Más espacio abajo */
+    cursor: pointer; /* Indicar que se puede copiar */
+    user-select: all; /* Facilitar selección */
+    transition: transform 0.1s ease-in-out; /* Transición para clic */
+}
+#game-code-display:active {
+     transform: scale(0.98); /* Efecto click */
+}
+
+#leaderboard .list-group-item,
+#final-podium-list-host .list-group-item,
+#player-list-lobby .list-group-item {
+     background-color: #343a40; /* Fondo ligeramente más claro para listas */
+     border-color: #495057;
+     color: #e9ecef; /* Texto más claro */
+}
+ #player-list-lobby {
+     max-height: 30vh; /* Limitar altura y añadir scroll si hay muchos */
+     overflow-y: auto;
+ }
+
+/* Estilo para bloques de pregunta en el builder */
+.question-block {
+     background-color: #343a40;
+     border: 1px solid #495057 !important; /* Asegurar borde */
+     position: relative; /* Para el botón de cerrar y handle */
+     margin-bottom: 1.5rem !important; /* Más separación entre bloques */
+     border-radius: 0.375rem; /* Redondeado */
+}
+.question-block .delete-question-btn {
+     position: absolute;
+     top: 0.5rem;
+     right: 0.5rem;
+     z-index: 10; /* Asegurar que esté por encima */
+}
+.question-block .drag-handle {
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: grab;
+    color: #adb5bd; /* Gris claro */
+    font-size: 1.5rem;
+    padding: 0.5rem; /* Área de agarre más grande */
+    z-index: 5;
+}
+.question-block:active .drag-handle {
+    cursor: grabbing;
+}
+/* Padding izquierdo para que el texto no se solape con el handle */
+.question-block > div:not(:has(.drag-handle)) { /* Aplica a los divs internos que NO contienen el handle */
+     padding-left: 3.5rem; /* Ajusta este valor según el tamaño del handle */
+}
+ /* Input de pregunta más grande */
+.question-block .question-text { font-size: 1.1rem; }
+
+ /* Estilo para la barra de progreso del timer */
+#timer-display {
+    height: 30px; /* Un poco más alta */
+    font-size: 1rem; /* Tamaño normal */
+    font-weight: bold;
+    background-color: #495057; /* Fondo de la barra */
+}
+#timer-bar {
+    transition: width 0.1s linear; /* Transición casi instantanea para el timer */
+    background-color: #0dcaf0; /* Color cian info */
+    color: #000; /* Texto negro para que se lea sobre cian */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+ #timer-bar.bg-danger {
+     background-color: #dc3545 !important; /* Rojo Bootstrap */
+     color: #fff; /* Texto blanco sobre rojo */
+ }
+
+
+ /* Ajustes menores */
+ main > section {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+ }
+ /* Ocultar flechas en input number */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield; /* Firefox */
+}
+ /* Errores con altura mínima */
+ #login-error, #register-error, #gift-import-status, #quiz-load-status { min-height: 1.5em; }
+
+/* Estilo para resultados de pregunta (simplificado) */
+ #results-display {
+     border: 1px solid #495057;
+     min-height: 50px; /* Espacio mínimo incluso si está vacío */
+ }
+
+ /* Estilo para el estado 'dragging' */
+.question-block.dragging {
+    opacity: 0.5;
+    border: 2px dashed #0dcaf0 !important;
+}
+/* Estilo para el placeholder donde se puede soltar */
+ .drop-zone {
+    height: 20px; /* Altura del espacio */
+    background-color: rgba(13, 202, 240, 0.2); /* Cian transparente */
+    border: 1px dashed #0dcaf0;
+    margin-top: -1.5rem; /* Solapar con el margen inferior del bloque anterior */
+    margin-bottom: 1.5rem;
+    border-radius: 0.375rem;
+ }
+/* Estilos para el indicador de espera en el lobby */
+.waiting-indicator .dots::after {
+  display: inline-block;
+  animation: ellipsis 1.25s infinite;
+  content: ".";
+  width: 1em;
+  text-align: left;
+}
+@keyframes ellipsis {
+  0% { content: "."; }
+  33% { content: ".."; }
+  66% { content: "..."; }
+}
+
+/* Opcional: Quitar el fondo y borde si prefieres solo texto */
+#player-list-lobby .waiting-indicator {
+    background-color: transparent !important; /* Hacer fondo transparente */
+    border: none !important; /* Quitar borde */
+    text-align: center; /* Centrar texto */
+}

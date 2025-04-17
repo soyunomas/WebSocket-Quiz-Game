@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unirse a QuizMaster Live</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+    <style>
+        /* Estilos personalizados */
+        body {
+            background-color: #212529;
+        }
+
+        /* Estilos para centrar contenido */
+        .vh-100 { min-height: 100vh; }
+        .d-flex { display: flex !important; }
+        .align-items-center { align-items: center !important; }
+        .justify-content-center { justify-content: center !important; }
+
+        /* Estilos botones de respuesta */
+        #player-game-view .answer-btn {
+            /* min-height: 100px; */ /* Quitar o reducir min-height para layout vertical */
+            min-height: 80px; /* Reducir altura mínima */
+            font-size: 1.3rem; /* Reducir un poco el tamaño base */
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 0.75rem 1rem;
+            white-space: normal;
+            line-height: 1.2;
+            text-align: left;
+            width: 100%; /* Ocupar todo el ancho */
+            /* Quitar height: 100% ya que no estamos en grid de columnas */
+        }
+        /* Quitar la regla de flex para el contenedor de columnas (ya no existe) */
+        /* #answer-options > div {
+             display: flex;
+         } */
+
+        #player-game-view .answer-btn .answer-symbol {
+             font-size: 1.8rem !important; /* Reducir tamaño símbolo */
+             flex-shrink: 0;
+             margin-right: 0.75rem;
+             display: inline-flex;
+             align-items: center;
+        }
+        #player-game-view .answer-btn .answer-text {
+            flex-grow: 1;
+            /* font-size: 1.1rem; /* Ajustar si es necesario */
+        }
+
+
+        /* Otros estilos específicos */
+        #game-code {
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        #final-podium-list-player .list-group-item,
+        #player-scoreboard-list .list-group-item {
+             background-color: #343a40;
+             border-color: #495057;
+        }
+
+         /* Ajustes menores */
+         main > section {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+         }
+          #join-error, #nickname-error { min-height: 1.5em; }
+
+         /* Estilos animación de puntos */
+         .dots::after {
+           display: inline-block;
+           animation: ellipsis 1.25s infinite;
+           content: ".";
+           width: 1em;
+           text-align: left;
+         }
+         @keyframes ellipsis {
+           0% { content: "."; }
+           33% { content: ".."; }
+           66% { content: "..."; }
+         }
+    </style>
+</head>
+<body class="d-flex align-items-center justify-content-center vh-100">
+
+    <main class="container text-center" style="max-width: 450px;">
+
+        <!-- Vista para Ingresar Código -->
+        <section id="join-view">
+            <h1 class="mb-4">QuizMaster Live</h1>
+            <form id="join-form">
+                <div class="mb-3">
+                    <label for="game-code" class="form-label visually-hidden">Código de Partida</label>
+                    <input type="text" class="form-control form-control-lg text-center fw-bold" id="game-code" placeholder="CÓDIGO DE PARTIDA" required maxlength="10" autocapitalize="characters">
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-100">Unirse</button>
+            </form>
+            <div id="join-error" class="text-danger mt-3" ></div>
+        </section>
+
+        <!-- Vista para Ingresar Apodo -->
+        <section id="nickname-view" style="display: none;">
+            <h2 class="mb-4">¡Casi Listo!</h2>
+            <p>Partida: <strong id="nickname-game-code"></strong></p>
+            <form id="nickname-form">
+                <div class="mb-3">
+                    <label for="nickname" class="form-label visually-hidden">Tu Apodo</label>
+                    <input type="text" class="form-control form-control-lg text-center" id="nickname" placeholder="Tu Apodo" required maxlength="20">
+                </div>
+                <button type="submit" class="btn btn-success btn-lg w-100">¡Entrar al Juego!</button>
+            </form>
+             <div id="nickname-error" class="text-danger mt-3" ></div>
+        </section>
+
+        <!-- Vista de Espera (Lobby Jugador) -->
+        <section id="waiting-view" style="display: none;">
+            <h2 class="mb-3">¡Unido!</h2>
+            <p class="lead mb-3">Esperando a que el anfitrión inicie el juego<span class="dots">...</span></p>
+            <p>Tu apodo: <strong id="player-nickname-display"></strong></p>
+            <p>Jugadores actuales: <strong id="player-count-lobby">1</strong></p>
+             <button id="disconnect-lobby-btn" class="btn btn-sm btn-outline-secondary mt-3">Desconectar</button>
+        </section>
+
+        <!-- Vista de Juego (Jugador) -->
+        <section id="player-game-view" class="text-center" style="display: none; width: 100%; padding: 1rem;">
+             <!-- Header con Puntuación y Ranking -->
+             <div class="player-game-header d-flex justify-content-between align-items-center mb-4 p-2 bg-body-tertiary rounded">
+                  <span id="player-score" class="fw-bold">Puntos: 0</span>
+                   <span id="player-timer" class="fw-bold text-info">Tiempo: <span id="player-time-left">--</span>s</span>
+                  <span id="player-rank" class="fw-bold">Rank: -</span>
+             </div>
+
+             <!-- Área para número y texto de pregunta -->
+             <div class="question-info mb-4">
+                 <h5 class="text-muted">Pregunta <span id="player-question-number">-</span> / <span id="player-total-questions">-</span></h5>
+                 <h2 id="player-question-text" class="display-6">Cargando...</h2>
+             </div>
+
+             <!-- Área Principal -->
+             <div id="player-game-content" style="min-height: 250px;">
+                  <!-- Opciones de respuesta (ahora apiladas) -->
+                  <div id="answer-options" class="d-grid gap-2 mb-3"> <!-- Clases cambiadas aquí -->
+                      <!-- Botones se generan aquí -->
+                  </div>
+                  <!-- Feedback post-respuesta -->
+                  <div id="feedback-view" style="display: none;" class="p-3 rounded">
+                      <h3 id="feedback-text" class="mb-3">¡Correcto!</h3>
+                      <p id="feedback-points" class="fs-5">+ 950 puntos</p>
+                       <p id="feedback-correct-answer" class="text-muted" style="display: none;">Respuesta correcta: <strong></strong></p>
+                       <p class="text-muted mt-2">Esperando resultados<span class="dots">...</span></p>
+                  </div>
+                  <!-- Esperando siguiente pregunta -->
+                  <div id="waiting-next-question" style="display: none;">
+                     <p class="lead">Esperando siguiente pregunta<span class="dots">...</span></p>
+                 </div>
+                 <!-- Estado intermedio: marcador -->
+                 <div id="scoreboard-display-player" style="display: none;">
+                      <h3 class="mb-3">Marcador Actual</h3>
+                      <ol id="player-scoreboard-list" class="list-group list-group-numbered mb-3" style="max-width: 350px; margin: auto;"></ol>
+                      <p class="text-muted">Esperando siguiente<span class="dots">...</span></p>
+                 </div>
+             </div>
+         </section>
+
+         <!-- Vista Final (Podio Jugador) -->
+        <section id="player-end-view" style="display: none;">
+            <h2 class="mb-3">¡Juego Terminado!</h2>
+            <p class="lead">Tu posición final: <strong id="player-final-rank"></strong></p>
+            <p>Tu puntuación: <strong id="player-final-score"></strong></p>
+            <h3 class="mt-4">🏆 Podio 🏆</h3>
+            <ol id="final-podium-list-player" class="list-group list-group-numbered mb-4" style="max-width: 350px; margin: auto;"></ol>
+             <button id="play-again-btn" class="btn btn-secondary mt-4">Unirse a otra partida</button>
+        </section>
+
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- INICIO JAVASCRIPT INCRUSTADO (JUGADOR) ---
+
+        // --- UI Helpers ---
+        function showView(viewId) { // ... (Sin cambios) ...
+            const views = document.querySelectorAll('main > section');
+            views.forEach(view => {
+                view.style.display = view.id === viewId ? 'block' : 'none';
+            });
+             document.body.style.height = 'auto';
+             requestAnimationFrame(() => { document.body.style.height = ''; });
+             console.log("Showing view:", viewId);
+        }
+        function displayError(elementId, message) { // ... (Sin cambios) ...
+            const errorElement = document.getElementById(elementId);
+            if (errorElement) {
+                errorElement.textContent = message || '';
+                 console.log(`Error display [${elementId}]: ${message}`);
+            }
+        }
+        function resetPlayerState() { // ... (Sin cambios) ...
+             console.log("Resetting player state");
+             currentGameCode = null;
+             currentPlayerNickname = null;
+             if (webSocket && webSocket.readyState !== WebSocket.CLOSED) { webSocket.close(1000, "Client reset"); }
+             webSocket = null;
+             if (questionTimerInterval) clearInterval(questionTimerInterval);
+             questionTimerInterval = null;
+             gameCodeInput.value = '';
+             nicknameInput.value = '';
+             document.getElementById('player-score').textContent = 'Puntos: 0';
+             document.getElementById('player-rank').textContent = 'Rank: -';
+             document.getElementById('player-time-left').textContent = '--';
+             document.getElementById('player-count-lobby').textContent = '1';
+             const playerQuestionNumberEl = document.getElementById('player-question-number');
+             const playerTotalQuestionsEl = document.getElementById('player-total-questions');
+             const playerQuestionTextEl = document.getElementById('player-question-text');
+             if (playerQuestionNumberEl) playerQuestionNumberEl.textContent = '-';
+             if (playerTotalQuestionsEl) playerTotalQuestionsEl.textContent = '-';
+             if (playerQuestionTextEl) playerQuestionTextEl.textContent = 'Cargando...';
+        }
+        // --- Lógica de Player Join y Game ---
+        const joinForm = document.getElementById('join-form'); // ... (Sin cambios) ...
+        const nicknameForm = document.getElementById('nickname-form'); // ... (Sin cambios) ...
+        const gameCodeInput = document.getElementById('game-code'); // ... (Sin cambios) ...
+        const nicknameInput = document.getElementById('nickname'); // ... (Sin cambios) ...
+        const playAgainBtn = document.getElementById('play-again-btn'); // ... (Sin cambios) ...
+        const disconnectLobbyBtn = document.getElementById('disconnect-lobby-btn'); // ... (Sin cambios) ...
+        let currentGameCode = null; // ... (Sin cambios) ...
+        let currentPlayerNickname = null; // ... (Sin cambios) ...
+        let webSocket = null; // ... (Sin cambios) ...
+        let questionTimerInterval = null; // ... (Sin cambios) ...
+        let currentQuestionOptions = []; // ... (Sin cambios) ...
+        // --- WebSocket Handling ---
+        function connectWebSocket(gameCode, nickname) { // ... (Sin cambios) ...
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/${gameCode}`;
+            console.log(`Intentando conectar a: ${wsUrl}`);
+            showView('waiting-view');
+            document.getElementById('player-nickname-display').textContent = nickname;
+            currentPlayerNickname = nickname;
+            displayError('nickname-error', '');
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) { webSocket.close(); }
+            webSocket = new WebSocket(wsUrl);
+            webSocket.onopen = () => { console.log("WebSocket conectado!"); sendMessage("join_game", { nickname: currentPlayerNickname }); };
+            webSocket.onmessage = (event) => { console.log("Mensaje recibido:", event.data); try { const message = JSON.parse(event.data); handleWebSocketMessage(message); } catch (error) { console.error("Error al parsear mensaje JSON:", error, event.data); displayError('join-error', "Error de comunicación con el servidor."); showView('join-view'); } };
+            webSocket.onerror = (error) => { console.error("Error de WebSocket:", error); displayError('join-error', 'Error de conexión. Verifica el código o el estado del servidor.'); showView('join-view'); resetPlayerState(); };
+            webSocket.onclose = (event) => { console.log("WebSocket cerrado:", event.code, event.reason); const endViewVisible = document.getElementById('player-end-view').style.display !== 'none'; if (!event.wasClean && !endViewVisible) { alert(`Conexión perdida: ${event.reason || 'Desconectado del servidor'}. Volviendo al inicio.`); } if (!endViewVisible) { resetPlayerState(); showView('join-view'); } };
+        }
+        function sendMessage(type, payload) { // ... (Sin cambios) ...
+             if (!webSocket || webSocket.readyState !== WebSocket.OPEN) { console.error("WebSocket no está conectado."); displayError('join-error', 'No se pudo enviar el mensaje. Conexión perdida.'); showView('join-view'); resetPlayerState(); return; }
+             const message = JSON.stringify({ type, payload });
+             console.log("Enviando mensaje:", message);
+             webSocket.send(message);
+         }
+         function handleWebSocketMessage(message) { // ... (Sin cambios) ...
+             const type = message.type;
+             const payload = message.payload;
+             console.log("Procesando tipo:", type, "Payload:", payload);
+             displayError('join-error', ''); displayError('nickname-error', '');
+            switch (type) {
+                case 'join_ack': console.log("Join Acknowledged:", payload.message); break;
+                case 'player_joined': console.log("Jugador unido:", payload.nickname); document.getElementById('player-count-lobby').textContent = payload.player_count; break;
+                case 'player_left': console.log("Jugador desconectado:", payload.nickname); document.getElementById('player-count-lobby').textContent = payload.player_count; break;
+                case 'game_started': console.log("¡El juego ha comenzado!"); showView('player-game-view'); break;
+                case 'new_question': console.log("Nueva pregunta recibida"); displayQuestion(payload); showView('player-game-view'); document.getElementById('answer-options').style.display = ''; document.getElementById('feedback-view').style.display = 'none'; document.getElementById('waiting-next-question').style.display = 'none'; document.getElementById('scoreboard-display-player').style.display = 'none'; break;
+                case 'answer_result': console.log("Resultado de respuesta recibido"); displayFeedback(payload); showView('player-game-view'); document.getElementById('answer-options').style.display = 'none'; document.getElementById('feedback-view').style.display = 'block'; document.getElementById('waiting-next-question').style.display = 'none'; document.getElementById('scoreboard-display-player').style.display = 'none'; break;
+                case 'update_scoreboard': console.log("Actualización de marcador recibida"); updatePlayerStats(payload); displayPlayerScoreboard(payload.scoreboard); showView('player-game-view'); document.getElementById('answer-options').style.display = 'none'; document.getElementById('feedback-view').style.display = 'none'; document.getElementById('waiting-next-question').style.display = 'none'; document.getElementById('scoreboard-display-player').style.display = 'block'; break;
+                case 'game_over': console.log("Fin de partida recibido"); displayFinalPodium(payload); showView('player-end-view'); if (webSocket && webSocket.readyState === WebSocket.OPEN) { webSocket.close(1000, "Game finished"); } break;
+                case 'error': console.error("Error del servidor:", payload.message, "Code:", payload.code); const currentView = document.querySelector('main > section:not([style*="display: none"])'); let errorDisplayId = 'join-error'; if (currentView) { if (currentView.id === 'nickname-view') errorDisplayId = 'nickname-error'; } displayError(errorDisplayId, payload.message); if (payload.code === "INVALID_GAME_CODE" || payload.code === "NICKNAME_IN_USE" || payload.code === "GAME_NOT_IN_LOBBY") { showView('join-view'); resetPlayerState(); } else if (payload.code === "HOST_DISCONNECTED") { alert("El anfitrión se desconectó. La partida ha terminado."); showView('join-view'); resetPlayerState(); } break;
+                default: console.warn("Tipo de mensaje no reconocido:", message.type);
+            }
+        }
+
+        // -------- displayQuestion MODIFICADO --------
+        function displayQuestion(questionData) {
+            currentQuestionOptions = questionData.options || []; // Guardar opciones
+
+            // Actualizar texto de pregunta y contadores
+            const playerQuestionNumberEl = document.getElementById('player-question-number');
+            const playerTotalQuestionsEl = document.getElementById('player-total-questions');
+            const playerQuestionTextEl = document.getElementById('player-question-text');
+            if (playerQuestionNumberEl) playerQuestionNumberEl.textContent = questionData.question_number ?? '-';
+            if (playerTotalQuestionsEl) playerTotalQuestionsEl.textContent = questionData.total_questions ?? '-';
+            if (playerQuestionTextEl) playerQuestionTextEl.textContent = questionData.question_text ?? 'Cargando pregunta...';
+
+            const optionsContainer = document.getElementById('answer-options');
+            optionsContainer.innerHTML = ''; // Limpiar opciones anteriores
+            // Cambiar clases para usar d-grid y gap
+            optionsContainer.className = 'd-grid gap-2 mb-3'; // Apilará los botones verticalmente con espacio
+
+            const symbols = ['▲', '◆', '●', '■'];
+            const colors = ['btn-danger', 'btn-primary', 'btn-warning', 'btn-success'];
+
+            (questionData.options || []).forEach((option, index) => {
+                const symbol = symbols[index % 4];
+                const colorClass = colors[index % 4];
+
+                // Crear el botón directamente (sin div de columna)
+                const button = document.createElement('button');
+                button.className = `btn ${colorClass} btn-lg answer-btn`; // Quitar w-100 (d-grid lo maneja), quitar h-100
+                button.dataset.optionId = option.id;
+
+                let answerText = option.text || '';
+                // Limpiar el prefijo %...%
+                answerText = answerText.replace(/^%-?\d+(\.\d+)?%/, '').trim();
+
+                button.innerHTML = `
+                    <span class="answer-symbol">${symbol}</span>
+                    <span class="answer-text">${answerText}</span>
+                `;
+
+                button.onclick = () => {
+                    document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = true);
+                    if (questionTimerInterval) clearInterval(questionTimerInterval);
+                    sendAnswer(option.id);
+                };
+
+                optionsContainer.appendChild(button); // Añadir el botón directamente al contenedor d-grid
+            });
+
+            startTimer(questionData.time_limit || 10);
+            document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = false);
+        }
+        // -------- FIN displayQuestion MODIFICADO --------
+
+         function startTimer(duration) { // ... (Sin cambios) ...
+             if (questionTimerInterval) { clearInterval(questionTimerInterval); }
+             let timeLeft = duration;
+             const timerElement = document.getElementById('player-time-left');
+             if(timerElement) timerElement.textContent = timeLeft;
+             questionTimerInterval = setInterval(() => {
+                 timeLeft--;
+                 if(timerElement) timerElement.textContent = timeLeft;
+                 if (timeLeft <= 0) {
+                     clearInterval(questionTimerInterval); questionTimerInterval = null;
+                     if(timerElement) timerElement.textContent = "0"; console.log("Time's up!");
+                     document.querySelectorAll('.answer-btn').forEach(button => button.disabled = true);
+                     const feedbackView = document.getElementById('feedback-view');
+                     const answerOptionsView = document.getElementById('answer-options');
+                     const feedbackTextEl = document.getElementById('feedback-text');
+                     const feedbackPointsEl = document.getElementById('feedback-points');
+                     const feedbackCorrectAnswerEl = document.getElementById('feedback-correct-answer');
+                     if(answerOptionsView) answerOptionsView.style.display = 'none';
+                     if(feedbackView) feedbackView.style.display = 'block';
+                     if(feedbackTextEl) { feedbackTextEl.textContent = "¡Tiempo Agotado!"; feedbackTextEl.classList.remove('text-success', 'text-danger'); }
+                     if(feedbackPointsEl) feedbackPointsEl.textContent = '';
+                     if(feedbackCorrectAnswerEl) feedbackCorrectAnswerEl.style.display = 'none';
+                 }
+             }, 1000);
+         }
+        function sendAnswer(optionId) { // ... (Sin cambios) ...
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) { console.log("Enviando respuesta:", optionId); sendMessage('submit_answer', { answer_id: optionId }); } else { console.error("WebSocket no está abierto para enviar respuesta."); alert("Error de conexión. No se pudo enviar la respuesta."); showView('join-view'); resetPlayerState(); }
+        }
+        function displayFeedback(feedbackData) { // ... (Sin cambios, ya limpia texto) ...
+             if (questionTimerInterval) clearInterval(questionTimerInterval);
+             const feedbackTextEl = document.getElementById('feedback-text');
+             const feedbackPointsEl = document.getElementById('feedback-points');
+             const feedbackCorrectAnswerEl = document.getElementById('feedback-correct-answer');
+             const feedbackCorrectAnswerTextEl = feedbackCorrectAnswerEl?.querySelector('strong');
+             if(feedbackTextEl){ feedbackTextEl.textContent = feedbackData.is_correct ? '¡Correcto!' : 'Incorrecto'; feedbackTextEl.classList.remove('text-success', 'text-danger'); feedbackTextEl.classList.add(feedbackData.is_correct ? 'text-success' : 'text-danger'); }
+             if(feedbackPointsEl){ feedbackPointsEl.textContent = `${feedbackData.points_awarded >= 0 ? '+' : ''}${feedbackData.points_awarded} puntos`; }
+             if (!feedbackData.is_correct && feedbackData.correct_answer_id && feedbackCorrectAnswerEl && feedbackCorrectAnswerTextEl) { const correctOption = currentQuestionOptions.find(opt => opt.id === feedbackData.correct_answer_id); let correctAnswerText = correctOption ? correctOption.text.replace(/^%-?\d+(\.\d+)?%/, '').trim() : 'No disponible'; feedbackCorrectAnswerTextEl.textContent = correctAnswerText; feedbackCorrectAnswerEl.style.display = 'block'; } else if(feedbackCorrectAnswerEl) { feedbackCorrectAnswerEl.style.display = 'none'; }
+             updatePlayerStats(feedbackData);
+        }
+         function displayPlayerScoreboard(scoreboardData) { // ... (Sin cambios) ...
+            const list = document.getElementById('player-scoreboard-list'); if (!list) return;
+            list.innerHTML = '';
+            if (scoreboardData && scoreboardData.length > 0) {
+                 scoreboardData.forEach(player => { const li = document.createElement('li'); li.className = 'list-group-item d-flex justify-content-between align-items-center'; li.innerHTML = `<span>${player.rank}. ${player.nickname}</span><span class="badge bg-primary rounded-pill">${player.score}</span>`; if (player.nickname === currentPlayerNickname) { li.classList.add('fw-bold', 'text-info'); } list.appendChild(li); });
+            } else { list.innerHTML = '<li class="list-group-item">Esperando resultados...</li>'; }
+         }
+        function updatePlayerStats(statsData) { // ... (Sin cambios) ...
+             console.log("Actualizando stats UI:", statsData);
+             const scoreEl = document.getElementById('player-score'); const rankEl = document.getElementById('player-rank');
+             let score = statsData.current_score ?? statsData.score ?? null; let rank = statsData.current_rank ?? statsData.rank ?? null;
+             if (score !== null && scoreEl) { scoreEl.textContent = `Puntos: ${score}`; }
+             if (rank !== null && rankEl) { rankEl.textContent = `Rank: ${rank}`; }
+             const finalRankEl = document.getElementById('player-final-rank'); const finalScoreEl = document.getElementById('player-final-score');
+             if (statsData.my_final_rank !== undefined && finalRankEl) { finalRankEl.textContent = statsData.my_final_rank; }
+             if (statsData.my_final_score !== undefined && finalScoreEl) { finalScoreEl.textContent = statsData.my_final_score; }
+        }
+        function displayFinalPodium(podiumData) { // ... (Sin cambios) ...
+             let myFinalRank = '-'; let myFinalScore = '-';
+             if (podiumData.podium && currentPlayerNickname) { const myEntry = podiumData.podium.find(p => p.nickname === currentPlayerNickname); if (myEntry) { myFinalRank = myEntry.rank; myFinalScore = myEntry.score; } }
+             const finalRankEl = document.getElementById('player-final-rank'); const finalScoreEl = document.getElementById('player-final-score');
+             if(finalRankEl) finalRankEl.textContent = myFinalRank; if(finalScoreEl) finalScoreEl.textContent = myFinalScore;
+            const list = document.getElementById('final-podium-list-player'); if(!list) return;
+            list.innerHTML = '';
+            if (podiumData.podium && podiumData.podium.length > 0) {
+                 podiumData.podium.forEach((player) => { const li = document.createElement('li'); li.className = 'list-group-item d-flex justify-content-between align-items-center'; let medal = ''; if (player.rank === 1) medal = '🥇 '; else if (player.rank === 2) medal = '🥈 '; else if (player.rank === 3) medal = '🥉 '; else medal = `${player.rank}. `; li.innerHTML = `<span>${medal}${player.nickname}</span><span class="badge bg-primary rounded-pill">${player.score}</span>`; if (player.nickname === currentPlayerNickname) { li.classList.add('fw-bold', 'text-info'); } list.appendChild(li); });
+            } else { list.innerHTML = '<li class="list-group-item">No se pudo cargar el podio.</li>'; }
+        }
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => { // ... (Sin cambios) ...
+            resetPlayerState(); showView('join-view');
+            joinForm.addEventListener('submit', (e) => { e.preventDefault(); const code = gameCodeInput.value.trim().toUpperCase(); if (code) { currentGameCode = code; const nicknameGameCodeEl = document.getElementById('nickname-game-code'); if(nicknameGameCodeEl) nicknameGameCodeEl.textContent = code; showView('nickname-view'); displayError('join-error', ''); nicknameInput.focus(); } else { displayError('join-error', 'Introduce un código de partida.'); } });
+            nicknameForm.addEventListener('submit', (e) => { e.preventDefault(); const nickname = nicknameInput.value.trim(); if (nickname && currentGameCode) { connectWebSocket(currentGameCode, nickname); } else if (!nickname) { displayError('nickname-error', 'Por favor, introduce un apodo.'); } else { displayError('join-error', 'Error inesperado. Introduce el código de nuevo.'); showView('join-view'); resetPlayerState(); } });
+            playAgainBtn.addEventListener('click', () => { resetPlayerState(); showView('join-view'); });
+            disconnectLobbyBtn.addEventListener('click', () => { if (webSocket && webSocket.readyState === WebSocket.OPEN) { webSocket.close(1000, "User disconnected from lobby"); } else { resetPlayerState(); showView('join-view'); } });
+            gameCodeInput.addEventListener('input', () => displayError('join-error', '')); nicknameInput.addEventListener('input', () => displayError('nickname-error', ''));
+        });
+
+        // --- FIN JAVASCRIPT INCRUSTADO (JUGADOR) ---
+    </script>
+</body>
+</html>
