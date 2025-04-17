@@ -76,9 +76,9 @@ Este proyecto permite a un "Anfitrión" crear cuestionarios de opción múltiple
     ```bash
     python -m venv venv
     # En Windows:
-    # venv\Scripts\activate
+    venv\Scripts\activate
     # En macOS/Linux:
-    # source venv/bin/activate
+    source venv/bin/activate
     ```
 
 3.  **Instala las dependencias de Python:**
