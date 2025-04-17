@@ -10,12 +10,21 @@ Una aplicación web para crear y jugar partidas de quiz en tiempo real, utilizan
 
 Este proyecto permite a un "Anfitrión" crear cuestionarios de opción múltiple, **ya sea manualmente a través de una interfaz web o importando preguntas directamente desde archivos en formato GIFT**, e iniciar partidas interactivas. Los "Jugadores" pueden unirse usando un código de partida único y competir respondiendo preguntas en tiempo real. La puntuación se calcula basada en la corrección y la velocidad.
 
-## 🖼️ Captura de Pantalla / Demo (Pendiente)
+## 🖼️ Capturas de Pantalla
 
-<!-- TODO: Añadir captura de pantalla cuando esté más pulido -->
-<!-- ![Captura de Pantalla del Proyecto](screenshot.png) -->
+<div align="center">
 
-*(Actualmente no hay demo pública disponible)*
+Aquí puedes ver algunas capturas de las diferentes vistas de la aplicación. Haz clic en una imagen para verla en tamaño completo.
+
+| Vista de Pregunta (Jugador)                     | Vista Final / Podio (Jugador)                 |
+| :-------------------------------------------: | :-------------------------------------------: |
+| <a href="images/screenshot.png"><img src="images/screenshot.png" alt="Jugador viendo una pregunta y opciones de respuesta" width="350"></a> | <a href="images/screenshot1.png"><img src="images/screenshot1.png" alt="Pantalla final del juego mostrando posición, puntuación y podio" width="350"></a> |
+| **Vista Control de partida (Anfitrión)**         | **Esperando jugadores (Anfitrión)**                  |
+| <a href="images/screenshot2.png"><img src="images/screenshot2.png" alt="Anfitrión viendo el lobby con el código de partida y jugadores conectados" width="350"></a> | <a href="images/screenshot3.png"><img src="images/screenshot3.png" alt="Panel principal del anfitrión mostrando la lista de cuestionarios" width="350"></a> |
+| **Creación/Edición de Quiz (Anfitrión)**      | **Vista organización Cuestionarios (Anfitrión)**   |
+| <a href="images/screenshot4.png"><img src="images/screenshot4.png" alt="Formulario para crear un nuevo cuestionario e importar desde archivo GIFT" width="350"></a> | <a href="images/screenshot5.png"><img src="images/screenshot5.png" alt="Anfitrión viendo el progreso de la pregunta actual y el ranking Top 5" width="350"></a> |
+
+</div>
 
 ## ✨ Características Principales
 
