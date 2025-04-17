@@ -2,13 +2,54 @@
 
 // Referencias a elementos
 let quizBuilderView, builderTitle, quizBuilderForm, quizIdInput, quizTitleInput,
-    questionsContainer, addQuestionBtn, cancelQuizBuilderBtnTop,
-    cancelQuizBuilderBtnBottom, saveQuizBtn, questionTemplate, optionTemplate,
+    questionsContainer, addQuestionBtn, cancelQuizBuilderBtnBottom, // quitado cancelQuizBuilderBtnTop como variable global
+    saveQuizBtn, // ID del botón de guardar ORIGINAL (inferior)
+    questionTemplate, optionTemplate,
     importGiftBtn, giftFileInput, giftFileNameSpan, giftImportStatus;
 
 let nextQuestionTempId = 0; // Para IDs temporales únicos de preguntas/opciones
 let draggedQuestion = null; // Para drag & drop
 let dropZone = null; // Para el placeholder visual de drag & drop
+let infoModalInstance = null; // Instancia para el modal de información genérico
+
+/**
+ * Muestra un modal de Bootstrap genérico con un mensaje.
+ * @param {string} message El mensaje a mostrar en el cuerpo del modal.
+ * @param {string} [title='Aviso'] El título opcional para el modal.
+ */
+function showInfoModal(message, title = 'Aviso') {
+    const modalElement = document.getElementById('infoModal');
+    const modalTitleElement = document.getElementById('infoModalLabel');
+    const modalBodyElement = document.getElementById('infoModalBody');
+
+    if (!modalElement || !modalTitleElement || !modalBodyElement) {
+        console.error("Elementos del modal de información no encontrados (#infoModal, #infoModalLabel, #infoModalBody)");
+        // Fallback a alert si el modal no está listo
+        alert(message);
+        return;
+    }
+
+    // Establecer título y mensaje
+    modalTitleElement.textContent = title;
+    modalBodyElement.textContent = message; // Usar textContent para seguridad
+
+    // Obtener o crear la instancia del modal y mostrarlo
+    if (!infoModalInstance) {
+        // Asegurarse de que Bootstrap esté cargado
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            infoModalInstance = new bootstrap.Modal(modalElement);
+        } else {
+            console.error("Bootstrap Modal no está disponible. Asegúrate de que el JS de Bootstrap esté cargado.");
+            alert(message); // Fallback si Bootstrap no funciona
+            return;
+        }
+    }
+    // Prevenir error si la instancia no se pudo crear
+    if (infoModalInstance) {
+        infoModalInstance.show();
+    }
+}
+
 
 function openQuizBuilder(quiz = null) {
     // Get elements needed by the builder
@@ -56,22 +97,23 @@ function openQuizBuilder(quiz = null) {
     }
      enableDragAndDrop(); // Habilitar Drag & Drop
      updateBuilderUIState(); // Actualizar estado inicial
-    showView('quiz-builder-view'); // Utility function
+    showView('quiz-builder-view'); // Utility function (debe estar definida globalmente o importada)
 }
 
 function loadQuizForEditing(quizId) {
      // Asegurarse que quizzes esté cargado
-     if (!window.quizzes || window.quizzes.length === 0) {
+     if (!window.quizzes || !Array.isArray(window.quizzes) || window.quizzes.length === 0) { // Comprobación más robusta
          console.warn("Quizzes not loaded yet, cannot edit.");
-         // Podrías intentar cargarlos aquí si no lo están
-         // loadQuizzesFromStorage();
-         // if (!window.quizzes) return; // Salir si aún no se cargaron
+         // Idealmente, intentar cargar y luego reintentar, o mostrar mensaje
+         // Por ahora, mostramos error directo si no están cargados
+         showInfoModal("No se han cargado los cuestionarios aún. Intenta recargar la página o volver al dashboard.", "Error de Carga");
+         return; // Salir si no hay quizzes
      }
-     const quiz = window.quizzes.find(q => q.id === quizId);
+     const quiz = window.quizzes.find(q => q && q.id === quizId); // Añadir q && por seguridad
      if (quiz) {
          openQuizBuilder(quiz);
      } else {
-         alert("Error: No se encontró el cuestionario.");
+         showInfoModal("Error: No se encontró el cuestionario.", "Error al Cargar");
      }
 }
 
@@ -97,13 +139,12 @@ function addQuestionBlock(questionData = null) {
      if (questionData) {
          questionTextInput.value = questionData.text || '';
          questionTimeInput.value = questionData.time_limit || 20;
-         // Asignar IDs existentes si los hay (importante para mantener referencias si se edita)
-         questionBlock.dataset.id = questionData.id || '';
+         questionBlock.dataset.id = questionData.id || ''; // Asignar ID existente
 
-         if (questionData.options && questionData.options.length >= 2) {
+         if (questionData.options && Array.isArray(questionData.options) && questionData.options.length >= 2) {
             questionData.options.forEach(opt => addOptionBlock(optionsCont, radioGroupName, opt));
          } else {
-              // Si no hay opciones válidas, añadir 2 por defecto
+              // Si no hay opciones válidas (o no es array), añadir 2 por defecto
               addOptionBlock(optionsCont, radioGroupName);
               addOptionBlock(optionsCont, radioGroupName);
          }
@@ -113,7 +154,7 @@ function addQuestionBlock(questionData = null) {
         addOptionBlock(optionsCont, radioGroupName);
      }
      questionsContainer.appendChild(questionNode);
-     updateBuilderUIState(questionBlock);
+     updateBuilderUIState(questionBlock); // Actualizar estado específico de este bloque
  }
 
  function addOptionBlock(optionsContainer, radioGroupName, optionData = null) {
@@ -135,8 +176,7 @@ function addQuestionBlock(questionData = null) {
      if (optionData) {
          textInput.value = optionData.text || '';
          radioInput.checked = optionData.is_correct === true;
-         // Asignar ID existente si lo hay
-         optionBlock.dataset.id = optionData.id || '';
+         optionBlock.dataset.id = optionData.id || ''; // Asignar ID existente
      }
      optionsContainer.appendChild(optionNode);
  }
@@ -148,10 +188,15 @@ function addQuestionBlock(questionData = null) {
      const allQuestionBlocks = questionsContainer.querySelectorAll('.question-block');
      const canDeleteQuestion = allQuestionBlocks.length > 1;
 
-     allQuestionBlocks.forEach(qb => {
+     // Si se pasa un bloque específico, solo actualiza ese
+     const blocksToUpdate = questionBlock ? [questionBlock] : allQuestionBlocks;
+
+     blocksToUpdate.forEach(qb => {
          const deleteQBtn = qb.querySelector('.delete-question-btn');
+         // Habilitar/deshabilitar botón de eliminar pregunta GLOBALMENTE
          if (deleteQBtn) deleteQBtn.disabled = !canDeleteQuestion;
 
+         // Lógica para botones de opciones DENTRO del bloque
          const optionsContainer = qb.querySelector('.options-container');
          const addOptionBtn = qb.querySelector('.add-option-btn');
          const deleteOptionBtns = qb.querySelectorAll('.delete-option-btn');
@@ -159,12 +204,22 @@ function addQuestionBlock(questionData = null) {
          if (!optionsContainer || !addOptionBtn) return;
 
          const currentOptionsCount = optionsContainer.querySelectorAll('.option-block').length;
+         const canAddOption = currentOptionsCount < 4;
+         const canDeleteOption = currentOptionsCount > 2;
 
-         addOptionBtn.disabled = currentOptionsCount >= 4;
+         addOptionBtn.disabled = !canAddOption;
          deleteOptionBtns.forEach(delBtn => {
-             delBtn.disabled = currentOptionsCount <= 2;
+             delBtn.disabled = !canDeleteOption;
          });
      });
+
+     // Si no se pasó un bloque específico, re-evaluar el estado de todos los botones de eliminar pregunta
+     if (!questionBlock) {
+        allQuestionBlocks.forEach(qb => {
+            const deleteQBtn = qb.querySelector('.delete-question-btn');
+            if (deleteQBtn) deleteQBtn.disabled = !canDeleteQuestion;
+        });
+     }
  }
 
  function saveQuiz(e) {
@@ -172,9 +227,14 @@ function addQuestionBlock(questionData = null) {
      quizTitleInput = quizTitleInput || document.getElementById('quiz-title');
      questionsContainer = questionsContainer || document.getElementById('questions-container');
      quizIdInput = quizIdInput || document.getElementById('quiz-id');
-     saveQuizBtn = saveQuizBtn || document.getElementById('save-quiz-btn');
+     // Referencias a AMBOS botones de guardar (aunque solo necesitamos uno para deshabilitar)
+     const saveBtnBottom = document.getElementById('save-quiz-btn');
+     const saveBtnTop = document.getElementById('save-quiz-btn-top-duplicate');
 
-     if (!quizTitleInput || !questionsContainer || !quizIdInput || !saveQuizBtn) return;
+     if (!quizTitleInput || !questionsContainer || !quizIdInput || !saveBtnBottom || !saveBtnTop) {
+         console.error("Elementos necesarios para guardar no encontrados.");
+         return;
+     }
 
      console.log("Validating and preparing quiz data...");
      const quizData = {
@@ -184,115 +244,123 @@ function addQuestionBlock(questionData = null) {
 
      let isValid = true;
      let firstErrorField = null;
+     let errorMessage = '';
 
      if (!quizData.title) {
-         alert("El título del cuestionario no puede estar vacío.");
-         quizTitleInput.focus();
-         return;
+         errorMessage = "El título del cuestionario no puede estar vacío.";
+         isValid = false; firstErrorField = quizTitleInput;
      }
 
      const questionBlocks = questionsContainer.querySelectorAll('.question-block');
 
-     if (questionBlocks.length === 0) {
-          alert("El cuestionario debe tener al menos una pregunta.");
-          return;
+     if (isValid && questionBlocks.length === 0) {
+          errorMessage = "El cuestionario debe tener al menos una pregunta.";
+          isValid = false;
      }
 
-     questionBlocks.forEach((qb, qIndex) => {
-         if (!isValid) return;
+     if (isValid) {
+         questionBlocks.forEach((qb, qIndex) => {
+             if (!isValid) return; // Salir del bucle forEach si ya falló
 
-         const questionTextInput = qb.querySelector('.question-text');
-         const questionTimeInput = qb.querySelector('.question-time');
-         if (!questionTextInput || !questionTimeInput) { isValid = false; return; }
+             const questionTextInput = qb.querySelector('.question-text');
+             const questionTimeInput = qb.querySelector('.question-time');
+             if (!questionTextInput || !questionTimeInput) { isValid = false; errorMessage = "Error interno al procesar la pregunta."; return; }
 
-         const questionText = questionTextInput.value.trim();
-         const questionTime = parseInt(questionTimeInput.value, 10);
-         const optionsData = [];
-         let correctOptionFound = false;
-         const questionId = qb.dataset.id || `q_${Date.now()}_${qIndex}`;
+             const questionText = questionTextInput.value.trim();
+             const questionTime = parseInt(questionTimeInput.value, 10);
+             const optionsData = [];
+             let correctOptionFound = false;
+             const questionId = qb.dataset.id || `q_${Date.now()}_${qIndex}`;
 
-         if (!questionText) {
-             alert(`El texto de la pregunta ${qIndex + 1} no puede estar vacío.`);
-             isValid = false; firstErrorField = questionTextInput; return;
-         }
-         if (isNaN(questionTime) || questionTime < 5 || questionTime > 120) {
-             alert(`El tiempo límite de la pregunta ${qIndex + 1} debe ser entre 5 y 120 segundos.`);
-             isValid = false; firstErrorField = questionTimeInput; return;
-         }
+             if (!questionText) {
+                 errorMessage = `El texto de la pregunta ${qIndex + 1} no puede estar vacío.`;
+                 isValid = false; firstErrorField = questionTextInput; return;
+             }
+             if (isNaN(questionTime) || questionTime < 5 || questionTime > 120) {
+                 errorMessage = `El tiempo límite de la pregunta ${qIndex + 1} debe ser entre 5 y 120 segundos.`;
+                 isValid = false; firstErrorField = questionTimeInput; return;
+             }
 
-         const optionBlocks = qb.querySelectorAll('.option-block');
-         if (optionBlocks.length < 2 || optionBlocks.length > 4) {
-              alert(`La pregunta ${qIndex + 1} debe tener entre 2 y 4 opciones.`);
-              isValid = false; return;
-         }
+             const optionBlocks = qb.querySelectorAll('.option-block');
+             if (optionBlocks.length < 2 || optionBlocks.length > 4) {
+                  errorMessage = `La pregunta ${qIndex + 1} debe tener entre 2 y 4 opciones.`;
+                  isValid = false; firstErrorField = qb.querySelector('.add-option-btn'); return; // Enfocar el botón de añadir por cercanía
+             }
 
-         optionBlocks.forEach((ob, oIndex) => {
+             optionBlocks.forEach((ob, oIndex) => {
+                 if (!isValid) return;
+                 const optionTextInput = ob.querySelector('.option-text');
+                 const optionCorrectInput = ob.querySelector('.option-correct');
+                 if (!optionTextInput || !optionCorrectInput) { isValid = false; errorMessage = "Error interno al procesar una opción."; return; }
+
+                 const optionText = optionTextInput.value.trim();
+                 const isCorrect = optionCorrectInput.checked;
+                 const optionId = ob.dataset.id || `opt_${questionId}_${oIndex}`;
+
+                 if (!optionText) {
+                     errorMessage = `El texto de la opción ${oIndex + 1} en la pregunta ${qIndex + 1} no puede estar vacío.`;
+                     isValid = false; firstErrorField = optionTextInput; return;
+                 }
+                 if (isCorrect && correctOptionFound) {
+                     errorMessage = `La pregunta ${qIndex + 1} tiene más de una opción marcada como correcta.`;
+                     isValid = false; firstErrorField = optionCorrectInput; return;
+                 }
+                 if (isCorrect) correctOptionFound = true;
+
+                 optionsData.push({ id: optionId, text: optionText, is_correct: isCorrect });
+             });
              if (!isValid) return;
-             const optionTextInput = ob.querySelector('.option-text');
-             const optionCorrectInput = ob.querySelector('.option-correct');
-             if (!optionTextInput || !optionCorrectInput) { isValid = false; return; }
 
-             const optionText = optionTextInput.value.trim();
-             const isCorrect = optionCorrectInput.checked;
-             const optionId = ob.dataset.id || `opt_${questionId}_${oIndex}`;
-
-             if (!optionText) {
-                 alert(`El texto de la opción ${oIndex + 1} en la pregunta ${qIndex + 1} no puede estar vacío.`);
-                 isValid = false; firstErrorField = optionTextInput; return;
+             if (!correctOptionFound) {
+                 errorMessage = `Debes marcar una opción como correcta en la pregunta ${qIndex + 1}.`;
+                 isValid = false; firstErrorField = qb.querySelector('.option-correct'); return; // Find first radio
              }
-             if (isCorrect && correctOptionFound) {
-                 alert(`La pregunta ${qIndex + 1} tiene más de una opción marcada como correcta.`);
-                 isValid = false; firstErrorField = optionCorrectInput; return;
-             }
-             if (isCorrect) correctOptionFound = true;
 
-             optionsData.push({ id: optionId, text: optionText, is_correct: isCorrect });
+             quizData.questions.push({
+                 id: questionId,
+                 text: questionText,
+                 time_limit: questionTime,
+                 options: optionsData
+             });
          });
-         if (!isValid) return;
-
-         if (!correctOptionFound) {
-             alert(`Debes marcar una opción como correcta en la pregunta ${qIndex + 1}.`);
-             isValid = false; firstErrorField = qb.querySelector('.option-correct'); return; // Find first radio
-         }
-
-         quizData.questions.push({
-             id: questionId,
-             text: questionText,
-             time_limit: questionTime,
-             options: optionsData
-         });
-     });
+     } // Fin del if(isValid) inicial
 
      if (!isValid) {
-         console.error("Validation failed.");
+         console.error("Validation failed:", errorMessage);
+         showInfoModal(errorMessage, "Error de Validación"); // Mostrar modal en lugar de alert
          if (firstErrorField) {
-             firstErrorField.focus();
-             try { firstErrorField.select(); } catch(err){}
+            // Podríamos intentar enfocarlo, pero es menos crítico que mostrar el error
+            // firstErrorField.focus();
          }
-         return;
+         return; // Detener el guardado
      }
 
      // --- GUARDADO SIMULADO EN LOCALSTORAGE ---
      console.log("Quiz data is valid. Saving (simulated)...");
-     saveQuizBtn.disabled = true;
-     saveQuizBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+     // Deshabilitar AMBOS botones de guardar
+     saveBtnBottom.disabled = true;
+     saveBtnTop.disabled = true;
+     saveBtnBottom.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+     saveBtnTop.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...';
+
 
      const existingQuizId = quizIdInput.value;
      quizData.id = existingQuizId || `quiz_${Date.now()}`;
 
+     // Simular retraso de red/guardado
      setTimeout(() => {
          let saved = false;
          if (!window.quizzes) window.quizzes = []; // Initialize if not existing
 
          if (existingQuizId) { // Editando
-            const index = window.quizzes.findIndex(q => q.id === existingQuizId);
+            const index = window.quizzes.findIndex(q => q && q.id === existingQuizId);
             if (index !== -1) {
                 window.quizzes[index] = quizData;
                 console.log("Quiz updated:", quizData.id);
                 saved = true;
             } else {
                 console.error("Error: Quiz to edit not found in array");
-                alert("Error al guardar: Cuestionario no encontrado para editar.");
+                showInfoModal("Error al guardar: No se encontró el cuestionario que intentabas editar.", "Error de Guardado");
             }
          } else { // Creando nuevo
             window.quizzes.push(quizData);
@@ -300,16 +368,21 @@ function addQuestionBlock(questionData = null) {
             saved = true;
          }
 
-         saveQuizBtn.disabled = false;
-         saveQuizBtn.innerHTML = 'Guardar Cuestionario';
+         // Rehabilitar AMBOS botones de guardar
+         saveBtnBottom.disabled = false;
+         saveBtnTop.disabled = false;
+         saveBtnBottom.innerHTML = 'Guardar Cuestionario';
+         saveBtnTop.innerHTML = 'Guardar Cuestionario';
 
          if (saved) {
-             saveQuizzesToStorage(); // dashboard.js function
-             alert("Cuestionario guardado correctamente.");
-             renderQuizList(); // dashboard.js function
-             showView('dashboard-view'); // utils.js function
+             // Funciones de dashboard.js (deben estar accesibles globalmente o importadas)
+             if (typeof saveQuizzesToStorage === 'function') saveQuizzesToStorage(); else console.error("saveQuizzesToStorage is not defined");
+             if (typeof renderQuizList === 'function') renderQuizList(); else console.error("renderQuizList is not defined");
+
+             // showInfoModal("Cuestionario guardado correctamente."); // Opcional: Notificación de éxito
+             if (typeof showView === 'function') showView('dashboard-view'); else console.error("showView is not defined"); // Función de utils.js
          }
-     }, 300);
+     }, 300); // Fin del setTimeout
  }
 
 
@@ -325,7 +398,7 @@ function addQuestionBlock(questionData = null) {
 
     if (!giftImportStatus || !giftFileNameSpan || !giftFileInput || !quizTitleInput || !questionsContainer || !quizIdInput) return;
 
-    giftImportStatus.textContent = '';
+    giftImportStatus.textContent = ''; // Limpiar estado anterior
     const file = event.target.files[0];
     if (!file) {
         giftFileNameSpan.textContent = ''; giftFileNameSpan.style.display = 'none'; return;
@@ -334,70 +407,59 @@ function addQuestionBlock(questionData = null) {
     console.log("Selected GIFT file:", file.name);
 
     if (!file.name.toLowerCase().endsWith('.txt') && !file.name.toLowerCase().endsWith('.gift')) {
-        displayError('gift-import-status', 'Error: El archivo debe ser .txt o .gift.');
+        displayError('gift-import-status', 'Error: El archivo debe ser .txt o .gift.'); // Usamos displayError para mensajes en línea
         resetGiftInput(); return;
     }
     const reader = new FileReader();
     reader.onload = (e) => {
          const fileContent = e.target.result;
          try {
-             const parsedQuestions = parseGIFT(fileContent); // parseGIFT debe retornar [] si no hay válidas
+             const parsedQuestions = parseGIFT(fileContent);
              if (parsedQuestions.length > 0) {
                  console.log(`Parsed ${parsedQuestions.length} GIFT questions.`);
 
-                 // --- INICIO DE LA LÓGICA CLAVE ---
+                 // --- LÓGICA PARA LIMPIAR BLOQUE INICIAL VACÍO ---
                  const isCreatingNewQuiz = !quizIdInput.value;
                  const existingQuestionBlocks = questionsContainer.querySelectorAll('.question-block');
                  let shouldClearInitialBlock = false;
-
                  if (isCreatingNewQuiz && existingQuestionBlocks.length === 1) {
-                     // Comprobar si el único bloque existente está realmente vacío
                      const firstQuestionText = existingQuestionBlocks[0].querySelector('.question-text');
                      const firstOptionsContainer = existingQuestionBlocks[0].querySelector('.options-container');
                      const firstOptions = firstOptionsContainer ? firstOptionsContainer.querySelectorAll('.option-text') : [];
                      let firstOptionsAreEmpty = true;
-                     firstOptions.forEach(optInput => {
-                         if (optInput.value.trim() !== '') {
-                             firstOptionsAreEmpty = false;
-                         }
-                     });
-
+                     firstOptions.forEach(optInput => { if (optInput.value.trim() !== '') firstOptionsAreEmpty = false; });
                      if (firstQuestionText && firstQuestionText.value.trim() === '' && firstOptionsAreEmpty) {
-                         console.log("Detected initial empty block while creating new quiz. Clearing before import.");
                          shouldClearInitialBlock = true;
                      }
                  }
-
                  if (shouldClearInitialBlock) {
-                     questionsContainer.innerHTML = ''; // Limpiar el bloque inicial vacío
+                     console.log("Clearing initial empty block before GIFT import.");
+                     questionsContainer.innerHTML = '';
                  }
-                 // --- FIN DE LA LÓGICA CLAVE ---
+                 // --- FIN LÓGICA LIMPIEZA ---
 
-
-                 // Añadir las preguntas parseadas (al contenedor vacío o al final si no se limpió)
                  parsedQuestions.forEach(q => addQuestionBlock(q));
 
-                 displayError('gift-import-status', `${parsedQuestions.length} pregunta(s) importada(s) correctamente. Revisa y guarda.`, true);
+                 displayError('gift-import-status', `${parsedQuestions.length} pregunta(s) importada(s) correctamente. Revisa y guarda.`, true); // Mensaje de éxito en línea
 
-                 // Si el título del quiz está vacío y el GIFT tenía título, usarlo (mantener)
                  if (!quizTitleInput.value.trim() && parsedQuestions[0]._giftTitle) {
                      quizTitleInput.value = parsedQuestions[0]._giftTitle;
                  }
                   enableDragAndDrop();
-                  updateBuilderUIState();
+                  updateBuilderUIState(); // Actualizar estado después de añadir
              } else {
-                 displayError('gift-import-status', 'No se encontraron preguntas de opción múltiple válidas (formato GIFT) en el archivo.');
+                 displayError('gift-import-status', 'No se encontraron preguntas de opción múltiple válidas (formato GIFT) en el archivo.'); // Mensaje de fallo en línea
              }
          } catch (parseError) {
              console.error("Error parsing GIFT:", parseError);
-             displayError('gift-import-status', `Error al procesar el archivo: ${parseError.message}`);
+             displayError('gift-import-status', `Error al procesar el archivo: ${parseError.message}`); // Error de parseo en línea
          } finally {
-             resetGiftInput();
+             resetGiftInput(); // Limpiar input de archivo en cualquier caso
          }
      };
     reader.onerror = (e) => {
          console.error("Error reading file:", e);
-         displayError('gift-import-status', 'Error al leer el archivo.');
+         displayError('gift-import-status', 'Error al leer el archivo.'); // Error de lectura en línea
          resetGiftInput();
      };
     reader.readAsText(file);
@@ -406,7 +468,6 @@ function addQuestionBlock(questionData = null) {
 function resetGiftInput(){
      giftFileInput = giftFileInput || document.getElementById('gift-file-input');
      if (giftFileInput) giftFileInput.value = null;
-     // Also reset filename display
      giftFileNameSpan = giftFileNameSpan || document.getElementById('gift-file-name');
      if (giftFileNameSpan) {
          giftFileNameSpan.textContent = '';
@@ -415,70 +476,90 @@ function resetGiftInput(){
 }
 
 function parseGIFT(text) {
+     // Asegurarse de que el texto no sea null o undefined
+     if (!text) return [];
+
      const questions = [];
-     const blocks = text.split(/\n\s*\n/);
+     // Normalizar saltos de línea y dividir por bloques (dos o más saltos de línea)
+     const blocks = text.replace(/\r\n/g, '\n').split(/\n{2,}/);
      let currentTitle = null;
 
      blocks.forEach((block, index) => {
          block = block.trim();
+         // Ignorar comentarios y bloques vacíos
          if (!block || block.startsWith('//')) return;
 
          let questionText = block;
          let answerBlockContent = '';
          let questionTitle = null;
 
+         // Extraer título si existe ::Título::Pregunta...
          if (questionText.startsWith('::')) {
             const titleEndIndex = questionText.indexOf('::', 2);
             if (titleEndIndex !== -1) {
                 questionTitle = questionText.substring(2, titleEndIndex).trim();
                 questionText = questionText.substring(titleEndIndex + 2).trim();
-                currentTitle = questionTitle;
+                currentTitle = questionTitle; // Recordar título para preguntas sin título propio
             }
          }
 
+         // Encontrar bloque de respuestas {}
          const answerStartIndex = questionText.indexOf('{');
          if (answerStartIndex === -1 || !questionText.endsWith('}')) {
              console.warn(`GIFT block ${index+1} skipped: No answer block {} found.`);
-             return;
+             return; // Saltar este bloque si no tiene formato de respuesta
          }
 
          answerBlockContent = questionText.substring(answerStartIndex + 1, questionText.length - 1).trim();
          questionText = questionText.substring(0, answerStartIndex).trim();
 
-         questionText = questionText.replace(/\[html\]/gi, '').replace(/<[^>]+>/g, '');
-         questionText = questionText.replace(/\\:/g, ':').replace(/\\#/g, '#').replace(/\\=/g, '=').replace(/\\~/g, '~').replace(/\\}/g, '}').replace(/\\{/g, '{');
+         // Limpieza básica de HTML y escapes GIFT para el texto de la pregunta
+         questionText = questionText.replace(/\[(html|moodle|markdown)\]/gi, ''); // Remover tags de formato [html], [moodle]...
+         questionText = questionText.replace(/<[^>]+>/g, ''); // Remover tags HTML <...>
+         questionText = questionText.replace(/\\([:={}\[\]#~])/g, '$1'); // Manejar escapes comunes \:, \=, \{, \}, etc.
 
          const options = [];
          let correctCount = 0;
-         const optionRegex = /([=~])\s*((?:[^\\#=~]|\\.)+?)\s*(?:#((?:[^\\=~]|\\.)*))?\s*(?=[=~]|$)/g;
+         // Regex para capturar opciones: [=~] (%peso%)? Texto (#Feedback)?
+         const optionRegex = /([=~])(?:%-?\d+(?:\.\d+)?%)?\s*((?:[^\\#=~]|\\.)+?)\s*(?:#((?:[^\\=~]|\\.)*))?\s*(?=[=~]|$)/g;
          let match;
 
          while ((match = optionRegex.exec(answerBlockContent)) !== null) {
-            const type = match[1];
-            let optText = match[2].replace(/^%-?\d+(\.\d+)?%/, '').trim(); // Remove weight prefix
+            const type = match[1]; // '=' o '~'
+            // Limpiar texto de opción similar a la pregunta
+            let optText = match[2].trim(); // Texto capturado
             optText = optText.replace(/<[^>]+>/g, '');
-            optText = optText.replace(/\\:/g, ':').replace(/\\#/g, '#').replace(/\\=/g, '=').replace(/\\~/g, '~').replace(/\\}/g, '}').replace(/\\{/g, '{');
+            optText = optText.replace(/\\([:={}\[\]#~])/g, '$1');
 
             const isCorrect = (type === '=');
             if (isCorrect) correctCount++;
 
-            options.push({
-                id: `opt_gift_${index}_${options.length}`,
-                text: optText,
-                is_correct: isCorrect
-            });
+            // Ignorar opciones vacías después de la limpieza
+            if (optText) {
+                options.push({
+                    id: `opt_gift_${index}_${options.length}`,
+                    text: optText,
+                    is_correct: isCorrect
+                    // Podríamos extraer el feedback (match[3]) si fuera necesario
+                });
+            } else {
+                 console.warn(`GIFT block ${index+1}: Skipped empty option text after cleaning.`);
+            }
          }
 
-         if (options.length >= 2 && options.length <= 4 && correctCount === 1) {
+         // Validar que sea opción múltiple con UNA SOLA respuesta correcta y texto de pregunta no vacío
+         const isValidMC = options.length >= 2 && options.length <= 4 && correctCount === 1 && questionText.trim();
+
+         if (isValidMC) {
             questions.push({
                 id: `q_gift_${index}`,
-                text: questionText,
-                time_limit: 20,
+                text: questionText.trim(),
+                time_limit: 20, // Tiempo por defecto
                 options: options,
-                _giftTitle: questionTitle || currentTitle
+                _giftTitle: questionTitle || currentTitle // Guardar título si existe
             });
          } else {
-             console.warn(`GIFT block ${index+1} skipped: Not a valid multiple-choice question for this app (options: ${options.length}, correct: ${correctCount}). Text: ${questionText.substring(0,30)}...`);
+             console.warn(`GIFT block ${index+1} skipped: Not a valid single-choice MC (options: ${options.length}, correct: ${correctCount}, text: ${!!questionText.trim()}).`);
          }
      });
 
@@ -490,13 +571,13 @@ function parseGIFT(text) {
  function enableDragAndDrop() {
      questionsContainer = questionsContainer || document.getElementById('questions-container');
      if (!questionsContainer) return;
-     // Remove existing listeners before adding new ones to prevent duplicates
+     // Limpiar listeners existentes
      questionsContainer.removeEventListener('dragstart', handleDragStart);
      questionsContainer.removeEventListener('dragover', handleDragOver);
      questionsContainer.removeEventListener('dragleave', handleDragLeave);
      questionsContainer.removeEventListener('drop', handleDrop);
      questionsContainer.removeEventListener('dragend', handleDragEnd);
-     // Add listeners
+     // Añadir listeners
      questionsContainer.addEventListener('dragstart', handleDragStart);
      questionsContainer.addEventListener('dragover', handleDragOver);
      questionsContainer.addEventListener('dragleave', handleDragLeave);
@@ -505,58 +586,48 @@ function parseGIFT(text) {
  }
 
  function handleDragStart(e) {
-     const target = e.target.closest('.question-block');
-     if (target && e.target.classList.contains('drag-handle')) {
-         draggedQuestion = target;
-         e.dataTransfer.effectAllowed = 'move';
-         setTimeout(() => target.classList.add('dragging'), 0);
+     if (e.target.classList.contains('drag-handle')) {
+         draggedQuestion = e.target.closest('.question-block');
+         if (draggedQuestion) {
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => { if(draggedQuestion) draggedQuestion.classList.add('dragging'); }, 0);
+         } else { e.preventDefault(); }
      } else {
-         e.preventDefault();
+         // No prevenir por defecto para permitir selección de texto en inputs
      }
  }
 
-  function handleDragOver(e) {
+ function handleDragOver(e) {
      e.preventDefault();
      e.dataTransfer.dropEffect = 'move';
      const target = e.target;
      const currentBlock = target.closest('.question-block');
-     questionsContainer = questionsContainer || document.getElementById('questions-container'); // Ensure container is available
+     questionsContainer = questionsContainer || document.getElementById('questions-container');
 
-     if (!dropZone) {
-         dropZone = document.createElement('div');
-         dropZone.className = 'drop-zone';
-     }
+     if (!dropZone) { dropZone = document.createElement('div'); dropZone.className = 'drop-zone'; }
 
      if (currentBlock && currentBlock !== draggedQuestion) {
          const rect = currentBlock.getBoundingClientRect();
          const offsetY = e.clientY - rect.top;
          if (offsetY < rect.height / 2) {
-             currentBlock.parentNode.insertBefore(dropZone, currentBlock);
+             questionsContainer.insertBefore(dropZone, currentBlock);
          } else {
-             if (currentBlock.nextSibling !== dropZone) {
-                 currentBlock.parentNode.insertBefore(dropZone, currentBlock.nextSibling);
-             }
+             questionsContainer.insertBefore(dropZone, currentBlock.nextSibling);
          }
-     } else if (!currentBlock && target === questionsContainer && questionsContainer) {
-         if (questionsContainer.lastChild !== dropZone) {
-             questionsContainer.appendChild(dropZone);
-          }
+     } else if (!currentBlock && target === questionsContainer) {
+         if(questionsContainer.lastElementChild !== dropZone) { questionsContainer.appendChild(dropZone); }
      }
  }
 
  function handleDragLeave(e) {
-    // Remove drop zone if leaving the container itself, or moving to a non-droppable child
-    if (e.target === questionsContainer || !e.relatedTarget || !e.relatedTarget.closest('.question-block, .drop-zone')) {
-       // Debounced removal might be better here to avoid flicker if moving quickly
-       // For now, simple removal on leave might be okay
-       // removeDropZone(); // Let's try removing only on drop/dragend
-    }
+     // Podríamos quitar la dropzone aquí si salimos del contenedor,
+     // pero dejarlo para drop/dragend es más simple y evita parpadeos.
  }
 
  function handleDrop(e) {
      e.preventDefault();
-     questionsContainer = questionsContainer || document.getElementById('questions-container'); // Ensure container is available
-     if (draggedQuestion && dropZone && dropZone.parentNode === questionsContainer && questionsContainer) {
+     questionsContainer = questionsContainer || document.getElementById('questions-container');
+     if (draggedQuestion && dropZone && dropZone.parentNode === questionsContainer) {
          questionsContainer.insertBefore(draggedQuestion, dropZone);
      }
      removeDropZone();
@@ -581,28 +652,56 @@ function parseGIFT(text) {
     // Get elements
     quizBuilderView = document.getElementById('quiz-builder-view');
     addQuestionBtn = document.getElementById('add-question-btn');
-    cancelQuizBuilderBtnTop = document.getElementById('cancel-quiz-builder-btn-top');
-    cancelQuizBuilderBtnBottom = document.getElementById('cancel-quiz-builder-btn-bottom');
     quizBuilderForm = document.getElementById('quiz-builder-form');
     importGiftBtn = document.getElementById('import-gift-btn');
     giftFileInput = document.getElementById('gift-file-input');
-    questionsContainer = document.getElementById('questions-container'); // Needed for event delegation
+    questionsContainer = document.getElementById('questions-container');
+
+    // --- Referencias a TODOS los botones de Cancelar y Guardar ---
+    const cancelBtnSmallTop = document.getElementById('cancel-quiz-builder-btn-top'); // El pequeño original
+    const cancelBtnDuplicateTop = document.getElementById('cancel-quiz-builder-btn-top-duplicate'); // El duplicado grande
+    cancelQuizBuilderBtnBottom = document.getElementById('cancel-quiz-builder-btn-bottom'); // El original inferior (variable global si se usa)
+    saveQuizBtn = document.getElementById('save-quiz-btn'); // El original inferior (variable global si se usa)
+    const saveBtnDuplicateTop = document.getElementById('save-quiz-btn-top-duplicate'); // El duplicado superior
 
     // Add Listeners
     if (addQuestionBtn) addQuestionBtn.addEventListener('click', () => { addQuestionBlock(); updateBuilderUIState(); enableDragAndDrop(); });
-    if (cancelQuizBuilderBtnTop) cancelQuizBuilderBtnTop.addEventListener('click', () => showView('dashboard-view'));
-    if (cancelQuizBuilderBtnBottom) cancelQuizBuilderBtnBottom.addEventListener('click', () => showView('dashboard-view'));
-    if (quizBuilderForm) quizBuilderForm.addEventListener('submit', saveQuiz);
-    if (importGiftBtn) importGiftBtn.addEventListener('click', () => giftFileInput?.click()); // Use optional chaining
+
+    // Acción común para todos los botones Cancelar
+    const cancelAction = () => {
+        if (typeof showView === 'function') {
+             showView('dashboard-view');
+        } else {
+            console.error("showView function is not defined");
+            // Fallback si showView no existe
+            window.location.hash = ''; // O alguna otra acción para volver
+        }
+    };
+    // Asignar la acción a todos los botones de cancelar encontrados
+    if (cancelBtnSmallTop) cancelBtnSmallTop.addEventListener('click', cancelAction);
+    if (cancelBtnDuplicateTop) cancelBtnDuplicateTop.addEventListener('click', cancelAction);
+    if (cancelQuizBuilderBtnBottom) cancelQuizBuilderBtnBottom.addEventListener('click', cancelAction);
+
+    // Asegurar que los botones de guardar sean de tipo submit y estén asociados al form
+    // Esto se hace mejor en el HTML con type="submit" y form="form-id"
+    // El listener del FORMULARIO gestionará ambos botones de guardar
+    if (quizBuilderForm) {
+        quizBuilderForm.addEventListener('submit', saveQuiz);
+    } else {
+        console.error("Quiz builder form not found!");
+    }
+
+    // GIFT import listeners
+    if (importGiftBtn) importGiftBtn.addEventListener('click', () => giftFileInput?.click());
     if (giftFileInput) giftFileInput.addEventListener('change', handleFileSelect);
 
-    // Delegación de eventos para botones +/-/delete dentro del builder
-    if (quizBuilderView) { // Add listener to the parent view
+    // Delegación de eventos para botones +/-/delete DENTRO de las preguntas
+    if (quizBuilderView) {
         quizBuilderView.addEventListener('click', (e) => {
              const addOptionButton = e.target.closest('.add-option-btn');
              const deleteOptionButton = e.target.closest('.delete-option-btn');
              const deleteQuestionButton = e.target.closest('.delete-question-btn');
-             const questionBlock = e.target.closest('.question-block'); // Get the parent question block
+             const questionBlock = e.target.closest('.question-block');
 
              if (addOptionButton && questionBlock) {
                  const optionsCont = questionBlock.querySelector('.options-container');
@@ -615,14 +714,29 @@ function parseGIFT(text) {
                   const optionBlock = deleteOptionButton.closest('.option-block');
                   if (optionBlock) {
                     optionBlock.remove();
-                    updateBuilderUIState(questionBlock); // Update state for this specific question
+                    updateBuilderUIState(questionBlock);
                   }
              } else if (deleteQuestionButton && questionBlock) {
-                  questionBlock.remove();
-                  updateBuilderUIState(); // Update state for all questions (as one was removed)
+                  const allBlocks = questionsContainer.querySelectorAll('.question-block');
+                  if (allBlocks.length > 1) {
+                      questionBlock.remove();
+                      updateBuilderUIState(); // Actualizar estado global (afecta a los botones de eliminar)
+                  } else {
+                      showInfoModal("No puedes eliminar la última pregunta. Añade otra primero si deseas reemplazarla.", "Acción No Permitida");
+                  }
              }
          });
     }
-    // Initial Drag and Drop setup (will be re-enabled when opening builder too)
+    // Initial Drag and Drop setup
     enableDragAndDrop();
+
+    // Verificar existencia del modal de info (la instancia se crea bajo demanda)
+    if (!document.getElementById('infoModal')) {
+        console.warn("Info modal element (#infoModal) not found during initBuilder. Modals will fallback to alerts.");
+    } else {
+         console.log("Info modal element found.");
+    }
  }
+
+ // Asegúrate de que initBuilder se llama en el momento adecuado
+ // document.addEventListener('DOMContentLoaded', initBuilder); // Si no depende de la autenticación
