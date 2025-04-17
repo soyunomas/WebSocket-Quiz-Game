@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-bs-theme="dark">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,7 +10,8 @@
     <style>
         /* Estilos personalizados */
         body {
-            background-color: #212529;
+            background-color: #f8f9fa; /* Cambiado a color claro */
+            color: #212529; /* Texto oscuro para el fondo claro */
         }
 
         /* Estilos para centrar contenido */
@@ -21,9 +22,8 @@
 
         /* Estilos botones de respuesta */
         #player-game-view .answer-btn {
-            /* min-height: 100px; */ /* Quitar o reducir min-height para layout vertical */
-            min-height: 80px; /* Reducir altura mínima */
-            font-size: 1.3rem; /* Reducir un poco el tamaño base */
+            min-height: 80px;
+            font-size: 1.3rem;
             display: flex;
             align-items: center;
             justify-content: flex-start;
@@ -31,16 +31,11 @@
             white-space: normal;
             line-height: 1.2;
             text-align: left;
-            width: 100%; /* Ocupar todo el ancho */
-            /* Quitar height: 100% ya que no estamos en grid de columnas */
+            width: 100%;
         }
-        /* Quitar la regla de flex para el contenedor de columnas (ya no existe) */
-        /* #answer-options > div {
-             display: flex;
-         } */
 
         #player-game-view .answer-btn .answer-symbol {
-             font-size: 1.8rem !important; /* Reducir tamaño símbolo */
+             font-size: 1.8rem !important;
              flex-shrink: 0;
              margin-right: 0.75rem;
              display: inline-flex;
@@ -48,7 +43,6 @@
         }
         #player-game-view .answer-btn .answer-text {
             flex-grow: 1;
-            /* font-size: 1.1rem; /* Ajustar si es necesario */
         }
 
 
@@ -60,8 +54,9 @@
 
         #final-podium-list-player .list-group-item,
         #player-scoreboard-list .list-group-item {
-             background-color: #343a40;
-             border-color: #495057;
+             background-color: #fff; /* Fondo blanco */
+             border-color: #ced4da; /* Borde gris claro */
+             color: #212529; /* Texto oscuro */
         }
 
          /* Ajustes menores */
@@ -84,9 +79,53 @@
            33% { content: ".."; }
            66% { content: "..."; }
          }
+
+        /* Estilos para el interruptor de tema */
+        #theme-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            font-size: 1.5rem; /* Ajusta el tamaño del icono */
+            color: #6c757d; /* Color grisáceo para que no resalte demasiado */
+            background: none;
+            border: none;
+            padding: 0;
+            z-index: 1000;
+        }
+
+        /* Modo oscuro (aplicado con clase 'dark-mode' en el body) */
+        body.dark-mode {
+            background-color: #212529; /* Fondo oscuro */
+            color: #f8f9fa; /* Texto claro */
+        }
+        body.dark-mode #final-podium-list-player .list-group-item,
+        body.dark-mode #player-scoreboard-list .list-group-item {
+             background-color: #343a40;
+             border-color: #495057;
+             color: #f8f9fa;
+        }
+        body.dark-mode .btn-outline-secondary {
+            color: #f8f9fa;
+            border-color: #6c757d;
+        }
+        body.dark-mode .btn-outline-secondary:hover {
+            color: #212529;
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        body.dark-mode .player-game-header {
+            background-color: #343a40 !important; /* Fondo oscuro */
+            color: #f8f9fa; /* Texto claro */
+        }
     </style>
 </head>
 <body class="d-flex align-items-center justify-content-center vh-100">
+
+    <!-- Botón para cambiar el tema -->
+    <button id="theme-toggle">
+        <i id="theme-icon" class="bi bi-sun-fill"></i>
+    </button>
 
     <main class="container text-center" style="max-width: 450px;">
 
@@ -144,7 +183,7 @@
              <!-- Área Principal -->
              <div id="player-game-content" style="min-height: 250px;">
                   <!-- Opciones de respuesta (ahora apiladas) -->
-                  <div id="answer-options" class="d-grid gap-2 mb-3"> <!-- Clases cambiadas aquí -->
+                  <div id="answer-options" class="d-grid gap-2 mb-3">
                       <!-- Botones se generan aquí -->
                   </div>
                   <!-- Feedback post-respuesta -->
@@ -401,6 +440,31 @@
             playAgainBtn.addEventListener('click', () => { resetPlayerState(); showView('join-view'); });
             disconnectLobbyBtn.addEventListener('click', () => { if (webSocket && webSocket.readyState === WebSocket.OPEN) { webSocket.close(1000, "User disconnected from lobby"); } else { resetPlayerState(); showView('join-view'); } });
             gameCodeInput.addEventListener('input', () => displayError('join-error', '')); nicknameInput.addEventListener('input', () => displayError('nickname-error', ''));
+
+            // --- Theme Toggle Logic ---
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const body = document.body;
+
+            // Función para cambiar el tema y guardar la preferencia
+            function toggleTheme() {
+                body.classList.toggle('dark-mode');
+                const isDarkMode = body.classList.contains('dark-mode');
+                themeIcon.classList.toggle('bi-sun-fill', !isDarkMode);
+                themeIcon.classList.toggle('bi-moon-fill', isDarkMode);
+                localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+            }
+
+            // Verificar el tema guardado en localStorage al cargar la página
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                body.classList.add('dark-mode');
+                themeIcon.classList.remove('bi-sun-fill');
+                themeIcon.classList.add('bi-moon-fill');
+            }
+
+            // Agregar el event listener al botón
+            themeToggle.addEventListener('click', toggleTheme);
         });
 
         // --- FIN JAVASCRIPT INCRUSTADO (JUGADOR) ---
