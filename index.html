@@ -105,6 +105,20 @@
              border-color: #495057;
              color: #f8f9fa;
         }
+         body.dark-mode .form-control {
+            background-color: #495057;
+            color: #f8f9fa;
+            border-color: #6c757d;
+        }
+        body.dark-mode .form-control::placeholder {
+            color: #adb5bd;
+        }
+        body.dark-mode .form-control:focus {
+            background-color: #495057;
+            color: #f8f9fa;
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
         body.dark-mode .btn-outline-secondary {
             color: #f8f9fa;
             border-color: #6c757d;
@@ -124,7 +138,8 @@
 
     <!-- Botón para cambiar el tema -->
     <button id="theme-toggle">
-        <i id="theme-icon" class="bi bi-sun-fill"></i>
+        <!-- El icono inicial se establece mediante JS -->
+        <i id="theme-icon" class="bi"></i>
     </button>
 
     <main class="container text-center" style="max-width: 450px;">
@@ -135,7 +150,7 @@
             <form id="join-form">
                 <div class="mb-3">
                     <label for="game-code" class="form-label visually-hidden">Código de Partida</label>
-                    <input type="text" class="form-control form-control-lg text-center fw-bold" id="game-code" placeholder="CÓDIGO DE PARTIDA" required maxlength="10" autocapitalize="characters">
+                    <input type="text" class="form-control form-control-lg text-center fw-bold" id="game-code" placeholder="CÓDIGO (4 LETRAS/NÚMEROS)" required maxlength="4" pattern="[A-Za-z0-9]{4}" title="Introduce 4 letras o números" autocapitalize="characters" inputmode="text">
                 </div>
                 <button type="submit" class="btn btn-primary btn-lg w-100">Unirse</button>
             </form>
@@ -161,7 +176,7 @@
             <h2 class="mb-3">¡Unido!</h2>
             <p class="lead mb-3">Esperando a que el anfitrión inicie el juego<span class="dots">...</span></p>
             <p>Tu apodo: <strong id="player-nickname-display"></strong></p>
-            <p>Jugadores actuales: <strong id="player-count-lobby">1</strong></p>
+            <p>Jugadores actuales: <strong id="player-count-lobby">0</strong></p> <!-- Cambiado valor inicial a 0 -->
              <button id="disconnect-lobby-btn" class="btn btn-sm btn-outline-secondary mt-3">Desconectar</button>
         </section>
 
@@ -221,64 +236,26 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // --- INICIO JAVASCRIPT INCRUSTADO (JUGADOR) ---
- function displayFinalPodium(podiumData) {
-     // Usar los campos específicos 'my_final_rank' y 'my_final_score' si existen
-     const myFinalRank = podiumData.my_final_rank ?? '-';
-     const myFinalScore = podiumData.my_final_score ?? '-';
 
-     const finalRankEl = document.getElementById('player-final-rank');
-     const finalScoreEl = document.getElementById('player-final-score');
-
-     if(finalRankEl) finalRankEl.textContent = myFinalRank;
-     if(finalScoreEl) finalScoreEl.textContent = myFinalScore;
-
-     // Mostrar la lista del podio (que ya viene filtrada desde el backend)
-     const list = document.getElementById('final-podium-list-player');
-     if(!list) return;
-     list.innerHTML = '';
-
-     if (podiumData.podium && podiumData.podium.length > 0) {
-         podiumData.podium.forEach((player) => {
-             const li = document.createElement('li');
-             li.className = 'list-group-item d-flex justify-content-between align-items-center';
-             let medal = '';
-             // Asegurarse de usar player.rank que viene en la lista podium
-             if (player.rank === 1) medal = '🥇 ';
-             else if (player.rank === 2) medal = '🥈 ';
-             else if (player.rank === 3) medal = '🥉 ';
-             else medal = `${player.rank}. `; // Para > 3 si se enviaran
-
-             // Mostrar nickname y score del jugador en el podio
-             li.innerHTML = `<span>${medal}${player.nickname}</span><span class="badge bg-primary rounded-pill">${player.score}</span>`;
-
-             // Resaltar si el jugador actual está en el podio
-             if (player.nickname === currentPlayerNickname) {
-                 li.classList.add('fw-bold', 'text-info');
-             }
-             list.appendChild(li);
-         });
-     } else {
-         list.innerHTML = '<li class="list-group-item">No se pudo cargar el podio.</li>';
-     }
- }
         // --- UI Helpers ---
-        function showView(viewId) { // ... (Sin cambios) ...
+        function showView(viewId) {
             const views = document.querySelectorAll('main > section');
             views.forEach(view => {
                 view.style.display = view.id === viewId ? 'block' : 'none';
             });
+             // Force reflow/repaint to handle height changes better
              document.body.style.height = 'auto';
              requestAnimationFrame(() => { document.body.style.height = ''; });
              console.log("Showing view:", viewId);
         }
-        function displayError(elementId, message) { // ... (Sin cambios) ...
+        function displayError(elementId, message) {
             const errorElement = document.getElementById(elementId);
             if (errorElement) {
                 errorElement.textContent = message || '';
                  console.log(`Error display [${elementId}]: ${message}`);
             }
         }
-        function resetPlayerState() { // ... (Sin cambios) ...
+        function resetPlayerState() {
              console.log("Resetting player state");
              currentGameCode = null;
              currentPlayerNickname = null;
@@ -291,68 +268,216 @@
              document.getElementById('player-score').textContent = 'Puntos: 0';
              document.getElementById('player-rank').textContent = 'Rank: -';
              document.getElementById('player-time-left').textContent = '--';
-             document.getElementById('player-count-lobby').textContent = '1';
+             document.getElementById('player-count-lobby').textContent = '0'; // Reset to 0
              const playerQuestionNumberEl = document.getElementById('player-question-number');
              const playerTotalQuestionsEl = document.getElementById('player-total-questions');
              const playerQuestionTextEl = document.getElementById('player-question-text');
              if (playerQuestionNumberEl) playerQuestionNumberEl.textContent = '-';
              if (playerTotalQuestionsEl) playerTotalQuestionsEl.textContent = '-';
              if (playerQuestionTextEl) playerQuestionTextEl.textContent = 'Cargando...';
+             displayError('join-error', '');
+             displayError('nickname-error', '');
         }
         // --- Lógica de Player Join y Game ---
-        const joinForm = document.getElementById('join-form'); // ... (Sin cambios) ...
-        const nicknameForm = document.getElementById('nickname-form'); // ... (Sin cambios) ...
-        const gameCodeInput = document.getElementById('game-code'); // ... (Sin cambios) ...
-        const nicknameInput = document.getElementById('nickname'); // ... (Sin cambios) ...
-        const playAgainBtn = document.getElementById('play-again-btn'); // ... (Sin cambios) ...
-        const disconnectLobbyBtn = document.getElementById('disconnect-lobby-btn'); // ... (Sin cambios) ...
-        let currentGameCode = null; // ... (Sin cambios) ...
-        let currentPlayerNickname = null; // ... (Sin cambios) ...
-        let webSocket = null; // ... (Sin cambios) ...
-        let questionTimerInterval = null; // ... (Sin cambios) ...
-        let currentQuestionOptions = []; // ... (Sin cambios) ...
+        const joinForm = document.getElementById('join-form');
+        const nicknameForm = document.getElementById('nickname-form');
+        const gameCodeInput = document.getElementById('game-code');
+        const nicknameInput = document.getElementById('nickname');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const disconnectLobbyBtn = document.getElementById('disconnect-lobby-btn');
+        let currentGameCode = null;
+        let currentPlayerNickname = null;
+        let webSocket = null;
+        let questionTimerInterval = null;
+        let currentQuestionOptions = []; // Store options with IDs to find correct text later
+
         // --- WebSocket Handling ---
-        function connectWebSocket(gameCode, nickname) { // ... (Sin cambios) ...
+        function connectWebSocket(gameCode, nickname) {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/${gameCode}`;
             console.log(`Intentando conectar a: ${wsUrl}`);
-            showView('waiting-view');
+
+            showView('waiting-view'); // Show waiting view immediately
             document.getElementById('player-nickname-display').textContent = nickname;
-            currentPlayerNickname = nickname;
-            displayError('nickname-error', '');
-            if (webSocket && webSocket.readyState === WebSocket.OPEN) { webSocket.close(); }
+             document.getElementById('player-count-lobby').textContent = '...'; // Indicate loading count
+            currentPlayerNickname = nickname; // Store nickname locally
+            displayError('nickname-error', ''); // Clear previous nickname errors
+
+            // Close existing connection if any
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                webSocket.close();
+            }
+
             webSocket = new WebSocket(wsUrl);
-            webSocket.onopen = () => { console.log("WebSocket conectado!"); sendMessage("join_game", { nickname: currentPlayerNickname }); };
-            webSocket.onmessage = (event) => { console.log("Mensaje recibido:", event.data); try { const message = JSON.parse(event.data); handleWebSocketMessage(message); } catch (error) { console.error("Error al parsear mensaje JSON:", error, event.data); displayError('join-error', "Error de comunicación con el servidor."); showView('join-view'); } };
-            webSocket.onerror = (error) => { console.error("Error de WebSocket:", error); displayError('join-error', 'Error de conexión. Verifica el código o el estado del servidor.'); showView('join-view'); resetPlayerState(); };
-            webSocket.onclose = (event) => { console.log("WebSocket cerrado:", event.code, event.reason); const endViewVisible = document.getElementById('player-end-view').style.display !== 'none'; if (!event.wasClean && !endViewVisible) { alert(`Conexión perdida: ${event.reason || 'Desconectado del servidor'}. Volviendo al inicio.`); } if (!endViewVisible) { resetPlayerState(); showView('join-view'); } };
+
+            webSocket.onopen = () => {
+                console.log("WebSocket conectado!");
+                // Send join message immediately after connection opens
+                sendMessage("join_game", { nickname: currentPlayerNickname });
+            };
+
+            webSocket.onmessage = (event) => {
+                console.log("Mensaje recibido:", event.data);
+                try {
+                    const message = JSON.parse(event.data);
+                    handleWebSocketMessage(message);
+                } catch (error) {
+                    console.error("Error al parsear mensaje JSON:", error, event.data);
+                    displayError('join-error', "Error de comunicación con el servidor.");
+                    showView('join-view'); // Go back to join view on parsing error
+                }
+            };
+
+            webSocket.onerror = (error) => {
+                console.error("Error de WebSocket:", error);
+                displayError('join-error', 'Error de conexión. Verifica el código o el estado del servidor.');
+                showView('join-view');
+                resetPlayerState(); // Ensure state is clean on error
+            };
+
+            webSocket.onclose = (event) => {
+                console.log("WebSocket cerrado:", event.code, event.reason);
+                const endViewVisible = document.getElementById('player-end-view').style.display !== 'none';
+                 // Only show alert if not cleanly closed and not already on the end screen
+                 if (!event.wasClean && !endViewVisible) {
+                    alert(`Conexión perdida: ${event.reason || 'Desconectado del servidor'}. Volviendo al inicio.`);
+                 }
+                 // Always reset state and go to join view unless game finished normally
+                 if (!endViewVisible) {
+                    resetPlayerState();
+                    showView('join-view');
+                }
+            };
         }
-        function sendMessage(type, payload) { // ... (Sin cambios) ...
-             if (!webSocket || webSocket.readyState !== WebSocket.OPEN) { console.error("WebSocket no está conectado."); displayError('join-error', 'No se pudo enviar el mensaje. Conexión perdida.'); showView('join-view'); resetPlayerState(); return; }
+
+        function sendMessage(type, payload) {
+             if (!webSocket || webSocket.readyState !== WebSocket.OPEN) {
+                 console.error("WebSocket no está conectado.");
+                 // Avoid showing alert here, onclose will handle it
+                 // displayError('join-error', 'No se pudo enviar el mensaje. Conexión perdida.');
+                 // showView('join-view');
+                 // resetPlayerState();
+                 return;
+             }
              const message = JSON.stringify({ type, payload });
              console.log("Enviando mensaje:", message);
              webSocket.send(message);
          }
-         function handleWebSocketMessage(message) { // ... (Sin cambios) ...
+
+         function handleWebSocketMessage(message) {
              const type = message.type;
              const payload = message.payload;
              console.log("Procesando tipo:", type, "Payload:", payload);
-             displayError('join-error', ''); displayError('nickname-error', '');
+
+             // Clear errors on receiving any valid message
+             displayError('join-error', '');
+             displayError('nickname-error', '');
+
             switch (type) {
-                case 'join_ack': console.log("Join Acknowledged:", payload.message); break;
-                case 'player_joined': console.log("Jugador unido:", payload.nickname); document.getElementById('player-count-lobby').textContent = payload.player_count; break;
-                case 'player_left': console.log("Jugador desconectado:", payload.nickname); document.getElementById('player-count-lobby').textContent = payload.player_count; break;
-                case 'game_started': console.log("¡El juego ha comenzado!"); showView('player-game-view'); break;
-                case 'new_question': console.log("Nueva pregunta recibida"); displayQuestion(payload); showView('player-game-view'); document.getElementById('answer-options').style.display = ''; document.getElementById('feedback-view').style.display = 'none'; document.getElementById('waiting-next-question').style.display = 'none'; document.getElementById('scoreboard-display-player').style.display = 'none'; break;
-                case 'answer_result': console.log("Resultado de respuesta recibido"); displayFeedback(payload); showView('player-game-view'); document.getElementById('answer-options').style.display = 'none'; document.getElementById('feedback-view').style.display = 'block'; document.getElementById('waiting-next-question').style.display = 'none'; document.getElementById('scoreboard-display-player').style.display = 'none'; break;
-                case 'update_scoreboard': console.log("Actualización de marcador recibida"); updatePlayerStats(payload); displayPlayerScoreboard(payload.scoreboard); showView('player-game-view'); document.getElementById('answer-options').style.display = 'none'; document.getElementById('feedback-view').style.display = 'none'; document.getElementById('waiting-next-question').style.display = 'none'; document.getElementById('scoreboard-display-player').style.display = 'block'; break;
-                case 'game_over': console.log("Fin de partida recibido"); displayFinalPodium(payload); showView('player-end-view'); if (webSocket && webSocket.readyState === WebSocket.OPEN) { webSocket.close(1000, "Game finished"); } break;
-                case 'error': console.error("Error del servidor:", payload.message, "Code:", payload.code); const currentView = document.querySelector('main > section:not([style*="display: none"])'); let errorDisplayId = 'join-error'; if (currentView) { if (currentView.id === 'nickname-view') errorDisplayId = 'nickname-error'; } displayError(errorDisplayId, payload.message); if (payload.code === "INVALID_GAME_CODE" || payload.code === "NICKNAME_IN_USE" || payload.code === "GAME_NOT_IN_LOBBY") { showView('join-view'); resetPlayerState(); } else if (payload.code === "HOST_DISCONNECTED") { alert("El anfitrión se desconectó. La partida ha terminado."); showView('join-view'); resetPlayerState(); } break;
-                default: console.warn("Tipo de mensaje no reconocido:", message.type);
+                case 'join_ack':
+                    console.log("Join Acknowledged:", payload.message);
+                    // --- MODIFICADO: Actualizar contador desde join_ack ---
+                    document.getElementById('player-count-lobby').textContent = payload.player_count ?? '1'; // Usar el contador del payload
+                    // No necesitamos hacer showView aquí, ya se hizo al intentar conectar
+                    break;
+                case 'player_joined':
+                    console.log("Jugador unido:", payload.nickname);
+                    // Actualizar contador en la vista de espera si aún está visible
+                    const lobbyCountEl = document.getElementById('player-count-lobby');
+                    if(lobbyCountEl && document.getElementById('waiting-view').style.display !== 'none') {
+                        lobbyCountEl.textContent = payload.player_count ?? '?';
+                    }
+                    break;
+                case 'player_left':
+                    console.log("Jugador desconectado:", payload.nickname);
+                    // Actualizar contador en la vista de espera si aún está visible
+                    const lobbyCountElLeft = document.getElementById('player-count-lobby');
+                     if(lobbyCountElLeft && document.getElementById('waiting-view').style.display !== 'none') {
+                         lobbyCountElLeft.textContent = payload.player_count ?? '?';
+                     }
+                    break;
+                case 'game_started':
+                    console.log("¡El juego ha comenzado!");
+                    showView('player-game-view');
+                    break;
+                case 'new_question':
+                    console.log("Nueva pregunta recibida");
+                    displayQuestion(payload);
+                    // Ensure correct sub-view is visible
+                    document.getElementById('answer-options').style.display = 'grid'; // O 'block' si no usas grid siempre
+                    document.getElementById('feedback-view').style.display = 'none';
+                    document.getElementById('waiting-next-question').style.display = 'none';
+                    document.getElementById('scoreboard-display-player').style.display = 'none';
+                    showView('player-game-view'); // Asegurarse de que la vista principal está activa
+                    break;
+                case 'answer_result':
+                    console.log("Resultado de respuesta recibido");
+                    displayFeedback(payload);
+                    // Ensure correct sub-view is visible
+                    document.getElementById('answer-options').style.display = 'none';
+                    document.getElementById('feedback-view').style.display = 'block';
+                    document.getElementById('waiting-next-question').style.display = 'none';
+                    document.getElementById('scoreboard-display-player').style.display = 'none';
+                    showView('player-game-view'); // Asegurarse de que la vista principal está activa
+                    break;
+                case 'update_scoreboard':
+                    console.log("Actualización de marcador recibida");
+                    updatePlayerStats(payload); // Actualiza score/rank en el header si se envían
+                    displayPlayerScoreboard(payload.scoreboard);
+                    // Ensure correct sub-view is visible
+                    document.getElementById('answer-options').style.display = 'none';
+                    document.getElementById('feedback-view').style.display = 'none';
+                    document.getElementById('waiting-next-question').style.display = 'none'; // Podría mostrarse después del scoreboard
+                    document.getElementById('scoreboard-display-player').style.display = 'block';
+                    showView('player-game-view'); // Asegurarse de que la vista principal está activa
+                    break;
+                case 'game_over':
+                    console.log("Fin de partida recibido");
+                    displayFinalPodium(payload);
+                    showView('player-end-view');
+                    // Close the WebSocket connection cleanly
+                    if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                        webSocket.close(1000, "Game finished");
+                    }
+                    break;
+                case 'error':
+                    console.error("Error del servidor:", payload.message, "Code:", payload.code);
+                    // Determine where to show the error based on current view
+                    const currentView = document.querySelector('main > section:not([style*="display: none"])');
+                    let errorDisplayId = 'join-error'; // Default
+                    if (currentView) {
+                        if (currentView.id === 'nickname-view') {
+                            errorDisplayId = 'nickname-error';
+                        } else if (currentView.id === 'waiting-view') {
+                           // Si hay error en la espera, quizás mostrarlo en join y resetear
+                           errorDisplayId = 'join-error';
+                           showView('join-view');
+                           resetPlayerState();
+                           break; // Salir del switch después de resetear
+                        }
+                        // Añadir más lógica si se necesitan errores en otras vistas
+                    }
+                    displayError(errorDisplayId, payload.message);
+
+                    // Specific error handling
+                    if (payload.code === "INVALID_GAME_CODE" || payload.code === "GAME_NOT_IN_LOBBY") {
+                        showView('join-view');
+                        resetPlayerState(); // Reset state for these errors
+                    } else if (payload.code === "NICKNAME_IN_USE") {
+                        showView('nickname-view'); // Stay on nickname view for this error
+                         nicknameInput.focus(); // Focus input again
+                    } else if (payload.code === "HOST_DISCONNECTED") {
+                        alert("El anfitrión se desconectó. La partida ha terminado.");
+                        showView('join-view');
+                        resetPlayerState();
+                    }
+                    break;
+                default:
+                    console.warn("Tipo de mensaje no reconocido:", message.type);
             }
         }
 
-        // -------- displayQuestion MODIFICADO --------
+        // --- Funciones de UI del Juego ---
         function displayQuestion(questionData) {
             currentQuestionOptions = questionData.options || []; // Guardar opciones
 
@@ -366,8 +491,7 @@
 
             const optionsContainer = document.getElementById('answer-options');
             optionsContainer.innerHTML = ''; // Limpiar opciones anteriores
-            // Cambiar clases para usar d-grid y gap
-            optionsContainer.className = 'd-grid gap-2 mb-3'; // Apilará los botones verticalmente con espacio
+            optionsContainer.className = 'd-grid gap-2 mb-3'; // Ensure grid layout
 
             const symbols = ['▲', '◆', '●', '■'];
             const colors = ['btn-danger', 'btn-primary', 'btn-warning', 'btn-success'];
@@ -375,14 +499,12 @@
             (questionData.options || []).forEach((option, index) => {
                 const symbol = symbols[index % 4];
                 const colorClass = colors[index % 4];
-
-                // Crear el botón directamente (sin div de columna)
                 const button = document.createElement('button');
-                button.className = `btn ${colorClass} btn-lg answer-btn`; // Quitar w-100 (d-grid lo maneja), quitar h-100
+                button.className = `btn ${colorClass} btn-lg answer-btn`;
                 button.dataset.optionId = option.id;
 
                 let answerText = option.text || '';
-                // Limpiar el prefijo %...%
+                // Limpiar el prefijo %...% si existe
                 answerText = answerText.replace(/^%-?\d+(\.\d+)?%/, '').trim();
 
                 button.innerHTML = `
@@ -391,120 +513,301 @@
                 `;
 
                 button.onclick = () => {
-                    document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = true);
+                    document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = true); // Disable all buttons on click
                     if (questionTimerInterval) clearInterval(questionTimerInterval);
                     sendAnswer(option.id);
                 };
 
-                optionsContainer.appendChild(button); // Añadir el botón directamente al contenedor d-grid
+                optionsContainer.appendChild(button);
             });
 
-            startTimer(questionData.time_limit || 10);
-            document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = false);
+            startTimer(questionData.time_limit || 10); // Start the timer
+            document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = false); // Ensure buttons are enabled initially
         }
-        // -------- FIN displayQuestion MODIFICADO --------
 
-         function startTimer(duration) { // ... (Sin cambios) ...
+         function startTimer(duration) {
              if (questionTimerInterval) { clearInterval(questionTimerInterval); }
              let timeLeft = duration;
              const timerElement = document.getElementById('player-time-left');
              if(timerElement) timerElement.textContent = timeLeft;
+
              questionTimerInterval = setInterval(() => {
                  timeLeft--;
                  if(timerElement) timerElement.textContent = timeLeft;
+
                  if (timeLeft <= 0) {
-                     clearInterval(questionTimerInterval); questionTimerInterval = null;
-                     if(timerElement) timerElement.textContent = "0"; console.log("Time's up!");
-                     document.querySelectorAll('.answer-btn').forEach(button => button.disabled = true);
+                     clearInterval(questionTimerInterval);
+                     questionTimerInterval = null;
+                     if(timerElement) timerElement.textContent = "0";
+                     console.log("Time's up!");
+                     document.querySelectorAll('.answer-btn').forEach(button => button.disabled = true); // Disable buttons
+
+                     // Show "Time's Up" feedback immediately
                      const feedbackView = document.getElementById('feedback-view');
                      const answerOptionsView = document.getElementById('answer-options');
                      const feedbackTextEl = document.getElementById('feedback-text');
                      const feedbackPointsEl = document.getElementById('feedback-points');
                      const feedbackCorrectAnswerEl = document.getElementById('feedback-correct-answer');
+
                      if(answerOptionsView) answerOptionsView.style.display = 'none';
                      if(feedbackView) feedbackView.style.display = 'block';
-                     if(feedbackTextEl) { feedbackTextEl.textContent = "¡Tiempo Agotado!"; feedbackTextEl.classList.remove('text-success', 'text-danger'); }
-                     if(feedbackPointsEl) feedbackPointsEl.textContent = '';
-                     if(feedbackCorrectAnswerEl) feedbackCorrectAnswerEl.style.display = 'none';
+                     if(feedbackTextEl) {
+                         feedbackTextEl.textContent = "¡Tiempo Agotado!";
+                         feedbackTextEl.classList.remove('text-success', 'text-danger'); // Neutral color
+                     }
+                     if(feedbackPointsEl) feedbackPointsEl.textContent = ''; // No points
+                     if(feedbackCorrectAnswerEl) feedbackCorrectAnswerEl.style.display = 'none'; // Hide correct answer initially
                  }
              }, 1000);
          }
-        function sendAnswer(optionId) { // ... (Sin cambios) ...
-            if (webSocket && webSocket.readyState === WebSocket.OPEN) { console.log("Enviando respuesta:", optionId); sendMessage('submit_answer', { answer_id: optionId }); } else { console.error("WebSocket no está abierto para enviar respuesta."); alert("Error de conexión. No se pudo enviar la respuesta."); showView('join-view'); resetPlayerState(); }
+
+        function sendAnswer(optionId) {
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                console.log("Enviando respuesta:", optionId);
+                sendMessage('submit_answer', { answer_id: optionId });
+            } else {
+                console.error("WebSocket no está abierto para enviar respuesta.");
+                // Alert might be annoying if connection drops briefly, rely on onclose
+                // alert("Error de conexión. No se pudo enviar la respuesta.");
+                // showView('join-view');
+                // resetPlayerState();
+            }
         }
-        function displayFeedback(feedbackData) { // ... (Sin cambios, ya limpia texto) ...
+
+        function displayFeedback(feedbackData) {
+             // Stop timer if it was still running (unlikely here, but safe)
              if (questionTimerInterval) clearInterval(questionTimerInterval);
+
              const feedbackTextEl = document.getElementById('feedback-text');
              const feedbackPointsEl = document.getElementById('feedback-points');
              const feedbackCorrectAnswerEl = document.getElementById('feedback-correct-answer');
              const feedbackCorrectAnswerTextEl = feedbackCorrectAnswerEl?.querySelector('strong');
-             if(feedbackTextEl){ feedbackTextEl.textContent = feedbackData.is_correct ? '¡Correcto!' : 'Incorrecto'; feedbackTextEl.classList.remove('text-success', 'text-danger'); feedbackTextEl.classList.add(feedbackData.is_correct ? 'text-success' : 'text-danger'); }
-             if(feedbackPointsEl){ feedbackPointsEl.textContent = `${feedbackData.points_awarded >= 0 ? '+' : ''}${feedbackData.points_awarded} puntos`; }
-             if (!feedbackData.is_correct && feedbackData.correct_answer_id && feedbackCorrectAnswerEl && feedbackCorrectAnswerTextEl) { const correctOption = currentQuestionOptions.find(opt => opt.id === feedbackData.correct_answer_id); let correctAnswerText = correctOption ? correctOption.text.replace(/^%-?\d+(\.\d+)?%/, '').trim() : 'No disponible'; feedbackCorrectAnswerTextEl.textContent = correctAnswerText; feedbackCorrectAnswerEl.style.display = 'block'; } else if(feedbackCorrectAnswerEl) { feedbackCorrectAnswerEl.style.display = 'none'; }
-             updatePlayerStats(feedbackData);
-        }
-         function displayPlayerScoreboard(scoreboardData) { // ... (Sin cambios) ...
-            const list = document.getElementById('player-scoreboard-list'); if (!list) return;
-            list.innerHTML = '';
-            if (scoreboardData && scoreboardData.length > 0) {
-                 scoreboardData.forEach(player => { const li = document.createElement('li'); li.className = 'list-group-item d-flex justify-content-between align-items-center'; li.innerHTML = `<span>${player.rank}. ${player.nickname}</span><span class="badge bg-primary rounded-pill">${player.score}</span>`; if (player.nickname === currentPlayerNickname) { li.classList.add('fw-bold', 'text-info'); } list.appendChild(li); });
-            } else { list.innerHTML = '<li class="list-group-item">Esperando resultados...</li>'; }
-         }
-        function updatePlayerStats(statsData) { // ... (Sin cambios) ...
-             console.log("Actualizando stats UI:", statsData);
-             const scoreEl = document.getElementById('player-score'); const rankEl = document.getElementById('player-rank');
-             let score = statsData.current_score ?? statsData.score ?? null; let rank = statsData.current_rank ?? statsData.rank ?? null;
-             if (score !== null && scoreEl) { scoreEl.textContent = `Puntos: ${score}`; }
-             if (rank !== null && rankEl) { rankEl.textContent = `Rank: ${rank}`; }
-             const finalRankEl = document.getElementById('player-final-rank'); const finalScoreEl = document.getElementById('player-final-score');
-             if (statsData.my_final_rank !== undefined && finalRankEl) { finalRankEl.textContent = statsData.my_final_rank; }
-             if (statsData.my_final_score !== undefined && finalScoreEl) { finalScoreEl.textContent = statsData.my_final_score; }
-        }
-        function displayFinalPodium(podiumData) { // ... (Sin cambios) ...
-             let myFinalRank = '-'; let myFinalScore = '-';
-             if (podiumData.podium && currentPlayerNickname) { const myEntry = podiumData.podium.find(p => p.nickname === currentPlayerNickname); if (myEntry) { myFinalRank = myEntry.rank; myFinalScore = myEntry.score; } }
-             const finalRankEl = document.getElementById('player-final-rank'); const finalScoreEl = document.getElementById('player-final-score');
-             if(finalRankEl) finalRankEl.textContent = myFinalRank; if(finalScoreEl) finalScoreEl.textContent = myFinalScore;
-            const list = document.getElementById('final-podium-list-player'); if(!list) return;
-            list.innerHTML = '';
-            if (podiumData.podium && podiumData.podium.length > 0) {
-                 podiumData.podium.forEach((player) => { const li = document.createElement('li'); li.className = 'list-group-item d-flex justify-content-between align-items-center'; let medal = ''; if (player.rank === 1) medal = '🥇 '; else if (player.rank === 2) medal = '🥈 '; else if (player.rank === 3) medal = '🥉 '; else medal = `${player.rank}. `; li.innerHTML = `<span>${medal}${player.nickname}</span><span class="badge bg-primary rounded-pill">${player.score}</span>`; if (player.nickname === currentPlayerNickname) { li.classList.add('fw-bold', 'text-info'); } list.appendChild(li); });
-            } else { list.innerHTML = '<li class="list-group-item">No se pudo cargar el podio.</li>'; }
-        }
-        // --- Event Listeners ---
-        document.addEventListener('DOMContentLoaded', () => { // ... (Sin cambios) ...
-            resetPlayerState(); showView('join-view');
-            joinForm.addEventListener('submit', (e) => { e.preventDefault(); const code = gameCodeInput.value.trim().toUpperCase(); if (code) { currentGameCode = code; const nicknameGameCodeEl = document.getElementById('nickname-game-code'); if(nicknameGameCodeEl) nicknameGameCodeEl.textContent = code; showView('nickname-view'); displayError('join-error', ''); nicknameInput.focus(); } else { displayError('join-error', 'Introduce un código de partida.'); } });
-            nicknameForm.addEventListener('submit', (e) => { e.preventDefault(); const nickname = nicknameInput.value.trim(); if (nickname && currentGameCode) { connectWebSocket(currentGameCode, nickname); } else if (!nickname) { displayError('nickname-error', 'Por favor, introduce un apodo.'); } else { displayError('join-error', 'Error inesperado. Introduce el código de nuevo.'); showView('join-view'); resetPlayerState(); } });
-            playAgainBtn.addEventListener('click', () => { resetPlayerState(); showView('join-view'); });
-            disconnectLobbyBtn.addEventListener('click', () => { if (webSocket && webSocket.readyState === WebSocket.OPEN) { webSocket.close(1000, "User disconnected from lobby"); } else { resetPlayerState(); showView('join-view'); } });
-            gameCodeInput.addEventListener('input', () => displayError('join-error', '')); nicknameInput.addEventListener('input', () => displayError('nickname-error', ''));
 
-            // --- Theme Toggle Logic ---
+             if(feedbackTextEl){
+                 feedbackTextEl.textContent = feedbackData.is_correct ? '¡Correcto!' : 'Incorrecto';
+                 feedbackTextEl.classList.remove('text-success', 'text-danger');
+                 feedbackTextEl.classList.add(feedbackData.is_correct ? 'text-success' : 'text-danger');
+             }
+             if(feedbackPointsEl){
+                 feedbackPointsEl.textContent = `${feedbackData.points_awarded >= 0 ? '+' : ''}${feedbackData.points_awarded} puntos`;
+             }
+
+            // Show correct answer only if the player was wrong
+             if (!feedbackData.is_correct && feedbackData.correct_answer_id && feedbackCorrectAnswerEl && feedbackCorrectAnswerTextEl) {
+                 // Find the text of the correct option from the stored options
+                 const correctOption = currentQuestionOptions.find(opt => opt.id === feedbackData.correct_answer_id);
+                 let correctAnswerText = correctOption ? correctOption.text.replace(/^%-?\d+(\.\d+)?%/, '').trim() : 'No disponible';
+                 feedbackCorrectAnswerTextEl.textContent = correctAnswerText;
+                 feedbackCorrectAnswerEl.style.display = 'block'; // Show the element
+             } else if(feedbackCorrectAnswerEl) {
+                 feedbackCorrectAnswerEl.style.display = 'none'; // Hide if correct or data missing
+             }
+
+             // Update score/rank in the header
+             updatePlayerStats(feedbackData);
+
+             // Ensure the feedback view is displayed
+             document.getElementById('answer-options').style.display = 'none';
+             document.getElementById('feedback-view').style.display = 'block';
+         }
+
+         function displayPlayerScoreboard(scoreboardData) {
+            const list = document.getElementById('player-scoreboard-list');
+            if (!list) return;
+            list.innerHTML = ''; // Clear previous entries
+            if (scoreboardData && scoreboardData.length > 0) {
+                 scoreboardData.forEach(player => {
+                     const li = document.createElement('li');
+                     li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                     li.innerHTML = `<span>${player.rank}. ${player.nickname}</span><span class="badge bg-primary rounded-pill">${player.score}</span>`;
+                     // Highlight the current player
+                     if (player.nickname === currentPlayerNickname) {
+                         li.classList.add('fw-bold', 'text-info');
+                     }
+                     list.appendChild(li);
+                 });
+            } else {
+                 list.innerHTML = '<li class="list-group-item">Esperando resultados...</li>';
+            }
+         }
+
+        function updatePlayerStats(statsData) {
+             console.log("Actualizando stats UI:", statsData);
+             const scoreEl = document.getElementById('player-score');
+             const rankEl = document.getElementById('player-rank');
+
+             // Update header score and rank if present in payload
+             // (Could come from answer_result or update_scoreboard)
+             let score = statsData.current_score ?? statsData.score ?? null; // Check both possible keys
+             let rank = statsData.current_rank ?? statsData.rank ?? null;
+
+             if (score !== null && scoreEl) {
+                 scoreEl.textContent = `Puntos: ${score}`;
+             }
+             if (rank !== null && rankEl) {
+                 rankEl.textContent = `Rank: ${rank}`;
+             }
+
+             // Update final screen stats if present (only from game_over)
+             const finalRankEl = document.getElementById('player-final-rank');
+             const finalScoreEl = document.getElementById('player-final-score');
+             if (statsData.my_final_rank !== undefined && finalRankEl) {
+                 finalRankEl.textContent = statsData.my_final_rank ?? '-';
+             }
+             if (statsData.my_final_score !== undefined && finalScoreEl) {
+                 finalScoreEl.textContent = statsData.my_final_score ?? '-';
+             }
+        }
+
+        function displayFinalPodium(podiumData) {
+             // Use the specific fields for the current player's final stats
+             const myFinalRank = podiumData.my_final_rank ?? '-';
+             const myFinalScore = podiumData.my_final_score ?? '-';
+
+             const finalRankEl = document.getElementById('player-final-rank');
+             const finalScoreEl = document.getElementById('player-final-score');
+
+             if(finalRankEl) finalRankEl.textContent = myFinalRank;
+             if(finalScoreEl) finalScoreEl.textContent = myFinalScore;
+
+             // Display the podium list (top 3 players provided by backend)
+             const list = document.getElementById('final-podium-list-player');
+             if(!list) return;
+             list.innerHTML = ''; // Clear previous list
+
+             if (podiumData.podium && podiumData.podium.length > 0) {
+                 podiumData.podium.forEach((player) => {
+                     const li = document.createElement('li');
+                     li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                     let medal = '';
+                     // Assign medals based on rank from the podium list
+                     if (player.rank === 1) medal = '🥇 ';
+                     else if (player.rank === 2) medal = '🥈 ';
+                     else if (player.rank === 3) medal = '🥉 ';
+                     else medal = `${player.rank}. `; // Fallback for ranks > 3 if sent
+
+                     li.innerHTML = `<span>${medal}${player.nickname}</span><span class="badge bg-primary rounded-pill">${player.score}</span>`;
+
+                     // Highlight if the current player is on the podium
+                     if (player.nickname === currentPlayerNickname) {
+                         li.classList.add('fw-bold', 'text-info');
+                     }
+                     list.appendChild(li);
+                 });
+             } else {
+                 list.innerHTML = '<li class="list-group-item">No se pudo cargar el podio.</li>';
+             }
+         }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            resetPlayerState(); // Initialize state
+            showView('join-view'); // Show join view first
+
+            // Join Form Submission
+            joinForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const code = gameCodeInput.value.trim().toUpperCase();
+                // Basic validation for 4 alphanumeric chars
+                if (code && /^[A-Z0-9]{4}$/.test(code)) {
+                    currentGameCode = code;
+                    const nicknameGameCodeEl = document.getElementById('nickname-game-code');
+                    if(nicknameGameCodeEl) nicknameGameCodeEl.textContent = code;
+                    showView('nickname-view');
+                    displayError('join-error', '');
+                    nicknameInput.focus(); // Focus nickname input
+                } else {
+                    displayError('join-error', 'Introduce un código válido (4 letras/números).');
+                }
+            });
+
+            // Nickname Form Submission
+            nicknameForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const nickname = nicknameInput.value.trim();
+                if (nickname && currentGameCode) {
+                    connectWebSocket(currentGameCode, nickname);
+                } else if (!nickname) {
+                    displayError('nickname-error', 'Por favor, introduce un apodo.');
+                } else {
+                    // Should not happen if join view validated code, but as fallback:
+                    displayError('join-error', 'Error inesperado. Introduce el código de nuevo.');
+                    showView('join-view');
+                    resetPlayerState();
+                }
+            });
+
+            // Play Again Button
+            playAgainBtn.addEventListener('click', () => {
+                resetPlayerState();
+                showView('join-view');
+            });
+
+            // Disconnect Button (Lobby)
+            disconnectLobbyBtn.addEventListener('click', () => {
+                 if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                     webSocket.close(1000, "User disconnected from lobby"); // Clean disconnect
+                 } else {
+                     // If WS already closed or failed, just reset UI
+                     resetPlayerState();
+                     showView('join-view');
+                 }
+            });
+
+            // Clear errors on input
+            gameCodeInput.addEventListener('input', () => displayError('join-error', ''));
+            nicknameInput.addEventListener('input', () => displayError('nickname-error', ''));
+
+            // --- Theme Toggle Logic (CORREGIDO) ---
             const themeToggle = document.getElementById('theme-toggle');
             const themeIcon = document.getElementById('theme-icon');
             const body = document.body;
 
-            // Función para cambiar el tema y guardar la preferencia
+            // Función para establecer el icono correcto basado en el modo
+            function updateThemeIcon(isDarkMode) {
+                if (isDarkMode) {
+                    // Si está en modo oscuro, muestra el sol (para cambiar a claro)
+                    themeIcon.classList.remove('bi-moon-fill');
+                    themeIcon.classList.add('bi-sun-fill');
+                } else {
+                    // Si está en modo claro, muestra la luna (para cambiar a oscuro)
+                    themeIcon.classList.remove('bi-sun-fill');
+                    themeIcon.classList.add('bi-moon-fill');
+                }
+            }
+
+            // Función para alternar el tema y guardar la preferencia
             function toggleTheme() {
                 body.classList.toggle('dark-mode');
                 const isDarkMode = body.classList.contains('dark-mode');
-                themeIcon.classList.toggle('bi-sun-fill', !isDarkMode);
-                themeIcon.classList.toggle('bi-moon-fill', isDarkMode);
+                updateThemeIcon(isDarkMode); // Actualiza el icono DESPUÉS de cambiar el tema
                 localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
             }
 
-            // Verificar el tema guardado en localStorage al cargar la página
+            // Comprueba el tema guardado al cargar la página
             const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'dark') {
-                body.classList.add('dark-mode');
-                themeIcon.classList.remove('bi-sun-fill');
-                themeIcon.classList.add('bi-moon-fill');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; // Opcional: Comprobar preferencia del sistema
+            let isInitiallyDark = false;
+
+            if (savedTheme) { // Prioriza la preferencia guardada
+                isInitiallyDark = (savedTheme === 'dark');
+            } else if (prefersDark) { // Si no hay guardada, usa la del sistema
+                // isInitiallyDark = true; // Descomenta si quieres que por defecto siga la del sistema
             }
 
-            // Agregar el event listener al botón
+
+            if (isInitiallyDark) {
+                body.classList.add('dark-mode');
+            }
+            // Establece el icono inicial correcto basado en el estado inicial
+            updateThemeIcon(isInitiallyDark);
+
+
+            // Agrega el event listener al botón de alternar
             themeToggle.addEventListener('click', toggleTheme);
-        });
+             // --- Fin Theme Toggle Logic (CORREGIDO) ---
+
+        }); // Fin DOMContentLoaded
 
         // --- FIN JAVASCRIPT INCRUSTADO (JUGADOR) ---
     </script>

@@ -280,8 +280,9 @@ async def handle_join_game(games_dict: Dict[str, Game], game: Game, websocket: W
     Valida el nickname, el estado de la partida (debe estar en LOBBY),
     y si el nickname ya está en uso. Si es válido, crea un objeto Player,
     lo añade al juego, asigna el rol de host si es el primero en unirse,
-    envía un mensaje de confirmación ('join_ack') al jugador y notifica
-    al resto ('player_joined') con el contador de jugadores reales.
+    envía un mensaje de confirmación ('join_ack') al jugador con la cuenta
+    de jugadores actual, y notifica al resto ('player_joined') con el
+    contador de jugadores reales.
 
     Args:
         games_dict: El diccionario global de partidas activas (para broadcast).
@@ -319,6 +320,11 @@ async def handle_join_game(games_dict: Dict[str, Game], game: Game, websocket: W
         if websocket not in game.active_connections:
             game.active_connections.append(websocket)
 
+        # --- MODIFICADO: Calcular el número de jugadores REALES ANTES de enviar el ACK ---
+        # Se calcula después de añadir al jugador actual a game.players
+        real_player_count = get_real_player_count(game)
+        # ---------------------------------------------------------------------------
+
         # Asignar Host si es el primero
         is_first_connection = (game.host_connection is None)
         if is_first_connection:
@@ -328,16 +334,19 @@ async def handle_join_game(games_dict: Dict[str, Game], game: Game, websocket: W
         else:
             welcome_message = f"¡Bienvenido a la partida {game.game_code}, {nickname}! Esperando al anfitrión."
 
-        # Enviar confirmación personal (Join ACK)
+        # --- MODIFICADO: Enviar confirmación personal (Join ACK) con el contador de jugadores ---
         await send_personal_message(websocket, WebSocketMessage(
             type="join_ack",
-            payload=JoinAckPayload(nickname=nickname, message=welcome_message)
+            payload=JoinAckPayload(
+                nickname=nickname,
+                message=welcome_message,
+                player_count=real_player_count # Incluir el contador
+            )
         ))
-
-        # Calcular número de jugadores reales (excluyendo al host)
-        real_player_count = get_real_player_count(game)
+        # ----------------------------------------------------------------------------------
 
         # Notificar a todos los demás jugadores (Broadcast Player Joined)
+        # El contador aquí ya es el actualizado.
         await broadcast(games_dict, game.game_code, WebSocketMessage(
             type="player_joined",
             payload=PlayerJoinedPayload(nickname=nickname, player_count=real_player_count)
@@ -361,7 +370,7 @@ async def handle_join_game(games_dict: Dict[str, Game], game: Game, websocket: W
         try:
             await send_personal_message(websocket, WebSocketMessage(type="error", payload=ErrorPayload(message="Error interno al unirse a la partida.")))
         except Exception:
-            pass # Si falla el envío, no hay mucho más que hacer
+            pass
 
 
 async def handle_start_game(games_dict: Dict[str, Game], game: Game, websocket: WebSocket):
@@ -388,8 +397,10 @@ async def handle_start_game(games_dict: Dict[str, Game], game: Game, websocket: 
         return
     # Verificar si hay jugadores reales (o si el host es el único conectado y se permite jugar solo)
     real_player_count = get_real_player_count(game)
-    if real_player_count <= 0 and len(game.players) <= 1: # Si no hay jugadores reales y el host está solo (o vacío)
-        await send_personal_message(websocket, WebSocketMessage(type="error", payload=ErrorPayload(message="No hay suficientes jugadores para iniciar.")))
+    # Permitir iniciar solo si hay al menos 1 jugador real (además del host)
+    # O si se quiere permitir que el host juegue solo, cambiar la condición
+    if real_player_count <= 0:
+        await send_personal_message(websocket, WebSocketMessage(type="error", payload=ErrorPayload(message="No hay suficientes jugadores (aparte del host) para iniciar.")))
         return
     if not game.quiz_data or not game.quiz_data.questions:
         logger.error(f"Host tried to start game {game.game_code} but quiz data is missing or empty.")
@@ -491,9 +502,13 @@ async def handle_submit_answer(game: Game, websocket: WebSocket, payload_data: d
         received_time = time.time()
 
         correct_answer_id = game.current_correct_answer_id
-        question_time_limit = 30
+        question_time_limit = 30 # Default value if fetching fails
         if game.quiz_data and 0 <= game.current_question_index < len(game.quiz_data.questions):
-            question_time_limit = game.quiz_data.questions[game.current_question_index].time_limit
+             current_question_data = game.quiz_data.questions[game.current_question_index]
+             question_time_limit = current_question_data.time_limit
+        else:
+             logger.warning(f"Could not get specific time limit for Q{game.current_question_index} in {game.game_code}. Using default: {question_time_limit}s")
+
 
         if not correct_answer_id:
             logger.error(f"Cannot process answer: Missing correct answer ID in game state for {game.game_code}. Player: {player.nickname}")
@@ -584,7 +599,10 @@ async def handle_next_question(games_dict: Dict[str, Game], game: Game, websocke
          # El temporizador automático ya está corriendo, así que podemos ignorarlo o informar.
          logger.info(f"Host clicked 'Next' during leaderboard display for game '{game.game_code}'. Auto-advance timer is active.")
          # Opcional: enviar un mensaje informativo al host
-         await send_personal_message(websocket, WebSocketMessage(type="info", payload={"message": "El juego avanzará automáticamente en breve."}))
+         # await send_personal_message(websocket, WebSocketMessage(type="info", payload={"message": "El juego avanzará automáticamente en breve."}))
+         # O quizás sí forzar el avance si se desea que el host tenga control total
+         # logger.info(f"Host manually triggered advance FROM leaderboard for game '{game.game_code}'.")
+         # await advance_to_next_stage(games_dict, game) # Descomentar para permitir avance manual desde LEADERBOARD
     else:
         # No se permite avance manual desde otros estados (LOBBY, FINISHED)
         logger.warning(f"Host tried 'next_question' in invalid state ({game.state}) for game {game.game_code}")
@@ -611,14 +629,14 @@ async def trigger_next_stage_after_delay(games_dict: Dict[str, Game], game: Game
 
     # Verificar si el juego aún existe y está en el estado correcto antes de avanzar
     # Esto evita errores si el juego fue eliminado o el host lo terminó manually durante la espera.
-    if game.game_code in games_dict and games_dict[game.game_code].state == GameStateEnum.LEADERBOARD:
-        # Usar la instancia más reciente del juego desde el diccionario
-        current_game_state = games_dict[game.game_code]
+    # Usar get() para evitar KeyError si el juego ya no existe
+    current_game_state_obj = games_dict.get(game.game_code)
+    if current_game_state_obj and current_game_state_obj.state == GameStateEnum.LEADERBOARD:
         logger.info(f"Game {game.game_code}: Auto-advance delay finished. Triggering next stage from LEADERBOARD.")
-        await advance_to_next_stage(games_dict, current_game_state) # Llamar a la lógica principal de avance
+        await advance_to_next_stage(games_dict, current_game_state_obj) # Llamar a la lógica principal de avance
     else:
         # Si el juego ya no existe o cambió de estado (ej: finalizado por host), cancelar el avance automático
-        current_state_val = games_dict.get(game.game_code).state.value if game.game_code in games_dict else 'N/A (Game Removed)'
+        current_state_val = current_game_state_obj.state.value if current_game_state_obj else 'N/A (Game Removed)'
         logger.info(f"Game {game.game_code}: Auto-advance cancelled. Game no longer exists or state changed during delay (Current state: {current_state_val}).")
 
 
@@ -688,55 +706,48 @@ async def handle_game_over(games_dict: Dict[str, Game], game: Game):
     logger.info(f"Game '{game.game_code}' is ending. Transitioning to FINISHED state.")
     game.state = GameStateEnum.FINISHED
 
-    # 1. Obtener marcador completo (puede incluir al host) - Necesario para obtener todos los scores
-    # <<< Asegurarse que get_scoreboard existe >>>
-    final_scoreboard_with_host = get_scoreboard(game)
+    # Obtener marcador solo de jugadores y ordenarlo
+    players_only_scoreboard_sorted = get_player_only_scoreboard(game)
 
-    # 2. Identificar y filtrar al host para obtener el marcador solo de jugadores
-    host_conn = game.host_connection
-    host_player = game.players.get(host_conn) if host_conn else None
-    host_nickname = host_player.nickname if host_player else None
-    players_only_scoreboard_unsorted = [p for p in final_scoreboard_with_host if p.nickname != host_nickname]
-
-    # 3. Re-calcular rangos basándose solo en los jugadores
-    players_only_scoreboard_sorted = sorted(players_only_scoreboard_unsorted, key=lambda p: p.score, reverse=True)
+    # Preparar diccionarios para acceso rápido a rangos y scores
     final_player_ranks: Dict[str, int] = {}
     final_player_scores: Dict[str, int] = {}
-    for i, entry in enumerate(players_only_scoreboard_sorted):
-        rank = i + 1
-        final_player_ranks[entry.nickname] = rank
+    for entry in players_only_scoreboard_sorted:
+        final_player_ranks[entry.nickname] = entry.rank
         final_player_scores[entry.nickname] = entry.score
-        # Actualizar el rank en la lista ordenada
-        entry.rank = rank
 
-    # 4. Obtener el podio (top 3) del marcador de solo jugadores
+    # Obtener el podio (top 3) del marcador de solo jugadores
     podium = players_only_scoreboard_sorted[:3]
     logger.info(f"Calculated final player ranks for {game.game_code}. Podium: {[p.nickname for p in podium]}")
 
-    # 5. Enviar mensajes personalizados a cada conexión activa
+    # Enviar mensajes personalizados a cada conexión activa
     connections_to_notify = list(game.active_connections)
     for websocket in connections_to_notify:
         player = game.players.get(websocket)
-        player_nickname = player.nickname if player else None
+        is_host = (game.host_connection == websocket)
 
-        if player and player_nickname in final_player_ranks:
+        payload: Optional[GameOverPayload] = None
+
+        if player and not is_host: # Es un jugador real
+            player_nickname = player.nickname
             my_rank = final_player_ranks.get(player_nickname)
             my_score = final_player_scores.get(player_nickname)
-
             payload = GameOverPayload(
                 podium=podium,
                 my_final_rank=my_rank,
                 my_final_score=my_score
             )
-            logger.debug(f"Sending personalized game_over to {player_nickname} in {game.game_code}. Rank: {my_rank}, Score: {my_score}")
-            await send_personal_message(websocket, WebSocketMessage(type="game_over", payload=payload))
-        elif websocket == host_conn:
-             # Enviar solo el podio al host
-             payload = GameOverPayload(podium=podium)
+            logger.debug(f"Sending personalized game_over to player {player_nickname} in {game.game_code}. Rank: {my_rank}, Score: {my_score}")
+
+        elif is_host: # Es el host
+             payload = GameOverPayload(podium=podium) # Enviar solo el podio al host
              logger.debug(f"Sending podium-only game_over to host in {game.game_code}.")
-             await send_personal_message(websocket, WebSocketMessage(type="game_over", payload=payload))
-        else:
+
+        else: # Conexión desconocida o ya desconectada?
              logger.warning(f"Skipping game_over message for a non-player/non-host connection in {game.game_code}")
+
+        if payload:
+             await send_personal_message(websocket, WebSocketMessage(type="game_over", payload=payload))
 
 
 async def handle_disconnect(games_dict: Dict[str, Game], game_code: str, websocket: WebSocket):
@@ -759,6 +770,7 @@ async def handle_disconnect(games_dict: Dict[str, Game], game_code: str, websock
 
     logger.info(f"Handling disconnect for websocket in game {game_code}.")
 
+    # Remover de la lista de conexiones activas primero
     if websocket in game.active_connections:
         game.active_connections.remove(websocket)
         logger.debug(f"Removed websocket from active_connections for game {game_code}. Remaining: {len(game.active_connections)}")
@@ -768,29 +780,33 @@ async def handle_disconnect(games_dict: Dict[str, Game], game_code: str, websock
     disconnected_player: Optional[Player] = None
     was_host = (game.host_connection == websocket)
     was_real_player = False # Flag para saber si era jugador (no host)
+    disconnected_nickname = "Unknown"
 
     if websocket in game.players:
         disconnected_player = game.players.pop(websocket, None)
         if disconnected_player:
-            logger.info(f"Player '{disconnected_player.nickname}' (was host: {was_host}) disconnected from game '{game.game_code}'. Players dict size: {len(game.players)}")
+            disconnected_nickname = disconnected_player.nickname
+            logger.info(f"Player '{disconnected_nickname}' (was host: {was_host}) disconnected from game '{game.game_code}'. Players dict size: {len(game.players)}")
             if not was_host: # Si no era el host, era un jugador real
                  was_real_player = True
-                 # Calcular nuevo contador de jugadores reales *después* de quitarlo
-                 real_player_count = get_real_player_count(game)
-                 # Notificar a los demás si el juego no ha terminado
-                 if game.state != GameStateEnum.FINISHED:
-                     await broadcast(games_dict, game.game_code,
-                                     WebSocketMessage(type="player_left",
-                                                      payload=PlayerLeftPayload(nickname=disconnected_player.nickname, player_count=real_player_count)), # Enviar contador real
-                                     exclude_connection=websocket)
         else:
              logger.warning(f"Websocket was in game.players dict but pop returned None for game {game_code}")
     else:
-         logger.debug(f"Websocket was not associated with any player in game {game.game_code} upon disconnect.")
+         logger.debug(f"Websocket was not associated with any player in game {game_code} upon disconnect.")
+
+    # Calcular nuevo contador de jugadores reales *después* de quitar al jugador (si se quitó)
+    real_player_count = get_real_player_count(game)
+
+    # Notificar a los demás si se fue un jugador real y el juego no ha terminado
+    if was_real_player and game.state != GameStateEnum.FINISHED:
+        await broadcast(games_dict, game.game_code,
+                        WebSocketMessage(type="player_left",
+                                         payload=PlayerLeftPayload(nickname=disconnected_nickname, player_count=real_player_count)), # Enviar contador real
+                        exclude_connection=None) # Notificar a TODOS los restantes
 
     # Lógica si el host se desconecta
     if was_host:
-        host_nickname = disconnected_player.nickname if disconnected_player else "Host (unknown nickname)"
+        host_nickname = disconnected_nickname if disconnected_player else "Host"
         logger.warning(f"Host '{host_nickname}' disconnected from game '{game.game_code}'.")
         game.host_connection = None
 
@@ -803,17 +819,18 @@ async def handle_disconnect(games_dict: Dict[str, Game], game_code: str, websock
                 ))
             except Exception as send_error:
                 logger.error(f"Error broadcasting host disconnect message for {game_code}: {send_error}")
-            await asyncio.sleep(0.1)
-            await handle_game_over(games_dict, game)
+            # Usar asyncio.create_task para no bloquear el handle_disconnect
+            asyncio.create_task(handle_game_over(games_dict, game))
         else:
              logger.info(f"Host disconnected from game {game.game_code} but game was already FINISHED.")
 
-    # Limpieza final del juego
+    # Limpieza final del juego si ya no quedan conexiones activas
     if not game.active_connections and game_code in games_dict:
         logger.info(f"Game '{game.game_code}' has no active connections remaining. Removing game object from memory.")
         del games_dict[game_code]
         logger.info(f"Remaining active games: {list(games_dict.keys())}")
-    elif game.state == GameStateEnum.FINISHED and not game.active_connections and game_code in games_dict:
-        logger.info(f"Finished game '{game.game_code}' has no active connections. Removing game object from memory.")
-        del games_dict[game_code]
-        logger.info(f"Remaining active games: {list(games_dict.keys())}")
+    # Opcional: Podríamos remover el juego FINISHED antes si todos se desconectan
+    # elif game.state == GameStateEnum.FINISHED and not game.active_connections and game_code in games_dict:
+    #    logger.info(f"Finished game '{game.game_code}' has no active connections. Removing game object from memory.")
+    #    del games_dict[game_code]
+    #    logger.info(f"Remaining active games: {list(games_dict.keys())}")

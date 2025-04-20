@@ -11,11 +11,11 @@ específica del juego al módulo `game_logic`.
 import json
 import logging
 import secrets
+import string # <<< Añadido para el conjunto de caracteres
 from typing import Dict, Optional
 
 # Importaciones FastAPI y Pydantic
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
-# <<< Añadido FileResponse >>>
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
@@ -42,6 +42,12 @@ logger = logging.getLogger(__name__)
 # Este diccionario es compartido y modificado por las funciones de game_logic.
 active_games: Dict[str, Game] = {}
 # ------------------------------------
+
+# --- Constantes de Generación de Código ---
+# <<< Añadido >>>
+GAME_CODE_LENGTH = 4
+GAME_CODE_CHARACTER_SET = string.ascii_uppercase + string.digits # A-Z, 0-9
+MAX_CODE_GENERATION_ATTEMPTS = 10 # Límite de intentos para evitar bucles infinitos
 
 # Crear instancia de la aplicación FastAPI
 app = FastAPI(title="QuizMaster Live Server")
@@ -88,31 +94,32 @@ async def create_game():
     """
     Crea una nueva 'sala' de juego (aún sin quiz ni jugadores).
 
-    Genera un código de juego único de 6 caracteres alfanuméricos en mayúsculas.
+    Genera un código de juego único de 4 caracteres alfanuméricos en mayúsculas.
     Crea un objeto `Game` inicial con estado LOBBY y lo almacena en el
     diccionario global `active_games`.
 
     Returns:
         Un diccionario JSON con la clave "game_code" y el código generado.
     Raises:
-        HTTPException 500 si ocurre un error inesperado.
+        HTTPException 500 si ocurre un error inesperado o no se puede generar código único.
     """
     logger.info("Received request to create a new game shell.")
     try:
-        # Generar un código único asegurándose de que no exista ya
+        # --- MODIFICADO: Generación de código de 4 caracteres alfanuméricos ---
         attempts = 0
-        max_attempts = 10 # Evitar bucle infinito si hay muchas colisiones (muy improbable)
-        while attempts < max_attempts:
-             game_code = secrets.token_hex(3).upper()
+        while attempts < MAX_CODE_GENERATION_ATTEMPTS:
+             game_code = ''.join(secrets.choice(GAME_CODE_CHARACTER_SET) for _ in range(GAME_CODE_LENGTH))
              if game_code not in active_games:
-                 break
+                 break # Código único encontrado
              attempts += 1
         else:
-            # Si se superan los intentos, algo va muy mal
-            logger.critical("Failed to generate a unique game code after multiple attempts!")
-            raise HTTPException(status_code=500, detail="Internal server error: Could not generate unique game code.")
+            # Si se superan los intentos, es un problema (quizás demasiados juegos activos para 4 chars?)
+            logger.critical(f"Failed to generate a unique {GAME_CODE_LENGTH}-character game code after {MAX_CODE_GENERATION_ATTEMPTS} attempts!")
+            raise HTTPException(status_code=500, detail=f"Internal server error: Could not generate unique game code. Too many active games?")
 
-        logger.info(f"Generated unique game code: {game_code}")
+        logger.info(f"Generated unique {GAME_CODE_LENGTH}-character game code: {game_code}")
+        # --------------------------------------------------------------------
+
         # Crear el objeto Game inicial (placeholder)
         new_game = Game(game_code=game_code, quiz_data=None) # Sin quiz cargado aún
 
@@ -124,6 +131,9 @@ async def create_game():
         return {"game_code": game_code}
 
     except Exception as e:
+        # Captura tanto el HTTPException de generación de código como otros errores
+        if isinstance(e, HTTPException): # Re-lanzar HTTPException para que FastAPI lo maneje
+             raise e
         logger.exception(f"Unexpected error creating game shell: {e}") # Loggear el traceback completo
         raise HTTPException(status_code=500, detail="Internal server error during game creation.")
 
@@ -134,22 +144,29 @@ async def websocket_endpoint(websocket: WebSocket, game_code_from_url: str):
     """
     Maneja las conexiones WebSocket para una partida específica.
 
-    Valida el `game_code`, acepta la conexión si el juego existe, y entra
-    en un bucle para recibir y procesar mensajes JSON del cliente.
-    Delega el manejo de cada tipo de mensaje a las funciones correspondientes
-    en `game_logic`. Maneja la desconexión del cliente llamando a
-    `handle_disconnect`.
+    Valida el `game_code` (ahora de 4 caracteres), acepta la conexión si el
+    juego existe, y entra en un bucle para recibir y procesar mensajes JSON
+    del cliente. Delega el manejo de cada tipo de mensaje a las funciones
+    correspondientes en `game_logic`. Maneja la desconexión del cliente
+    llamando a `handle_disconnect`.
 
     Args:
         websocket: La conexión WebSocket entrante.
-        game_code_from_url: El código de la partida extraído de la URL.
+        game_code_from_url: El código de la partida (4 caracteres) extraído de la URL.
     """
     client_host = websocket.client.host
     client_port = websocket.client.port
     logger.info(f"WebSocket connection attempt from {client_host}:{client_port} for game code '{game_code_from_url}'")
 
-    # Normalizar y validar el código del juego
+    # --- MODIFICADO: Normalización sigue siendo importante (a mayúsculas) ---
+    # Asegura que 'aBc1' se trate igual que 'ABC1'
     game_code = game_code_from_url.strip().upper()
+    # Opcional: Añadir validación explícita de longitud y caracteres si se desea ser más estricto
+    # if len(game_code) != GAME_CODE_LENGTH or not all(c in GAME_CODE_CHARACTER_SET for c in game_code):
+    #    logger.warning(f"Invalid game code format received: '{game_code_from_url}'. Rejecting.")
+    #    # ... código de rechazo ...
+    #    return
+    # --------------------------------------------------------------------
 
     # Buscar la partida en el diccionario global
     game = active_games.get(game_code)
@@ -327,7 +344,7 @@ async def websocket_endpoint(websocket: WebSocket, game_code_from_url: str):
         try:
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
         except Exception:
-            pass # La conexión podría estar ya cerrada
+            pass
 
 
 # --- Endpoints HTML para Servir las Interfaces de Usuario ---

@@ -81,7 +81,7 @@ class AnswerRecord(BaseModel):
 
 class Game(BaseModel):
     """Representa el estado completo de una partida en curso."""
-    game_code: str = Field(..., description="Código único de 6 caracteres que identifica la partida")
+    game_code: str = Field(..., description="Código único de 4 caracteres alfanuméricos (mayúsculas) que identifica la partida")
     host_connection: Optional[WebSocket] = Field(default=None, exclude=True, description="Conexión WebSocket del anfitrión (host)")
     quiz_data: Optional[QuizData] = Field(default=None, description="Datos del cuestionario cargado para esta partida")
     players: Dict[WebSocket, Player] = Field(default_factory=dict, description="Diccionario que mapea conexiones WebSocket a objetos Player")
@@ -124,16 +124,18 @@ class JoinAckPayload(BaseModel):
     """Payload para el mensaje 'join_ack' enviado al jugador que se une."""
     nickname: str = Field(..., description="Nickname confirmado del jugador")
     message: str = Field(..., description="Mensaje de bienvenida o estado")
+    # --- AÑADIDO ---
+    player_count: int = Field(..., description="Número total de jugadores reales (sin host) al momento de unirse")
 
 class PlayerJoinedPayload(BaseModel):
     """Payload para el mensaje 'player_joined' broadcast a todos."""
     nickname: str = Field(..., description="Nickname del jugador que se unió")
-    player_count: int = Field(..., description="Número total de jugadores actual")
+    player_count: int = Field(..., description="Número total de jugadores (sin host) actual")
 
 class PlayerLeftPayload(BaseModel):
     """Payload para el mensaje 'player_left' broadcast a todos."""
     nickname: str = Field(..., description="Nickname del jugador que se desconectó")
-    player_count: int = Field(..., description="Número total de jugadores restante")
+    player_count: int = Field(..., description="Número total de jugadores (sin host) restante")
 
 class GameStartedPayload(BaseModel):
     """Payload (vacío) para el mensaje 'game_started' broadcast a todos."""
@@ -167,8 +169,10 @@ class UpdateScoreboardPayload(BaseModel):
     scoreboard: List[ScoreboardEntry] = Field(..., description="Lista ordenada de jugadores y sus puntuaciones")
 
 class GameOverPayload(BaseModel):
-    """Payload para el mensaje 'game_over' broadcast a todos."""
-    podium: List[ScoreboardEntry] = Field(..., description="Los 3 mejores jugadores (o menos si hay menos jugadores)")
+    """Payload para el mensaje 'game_over' enviado a cada jugador."""
+    podium: List[ScoreboardEntry] = Field(..., description="Los 3 mejores jugadores (o menos si hay menos jugadores, excluyendo al host)")
+    my_final_rank: Optional[int] = Field(default=None, description="El rango final específico de este jugador entre todos los jugadores (excluyendo host)")
+    my_final_score: Optional[int] = Field(default=None, description="La puntuación final específica de este jugador")
 
 class ErrorPayload(BaseModel):
     """Payload para mensajes de 'error' enviados a un cliente específico o broadcast."""
@@ -179,9 +183,3 @@ class WebSocketMessage(BaseModel):
     """Estructura estándar para todos los mensajes WebSocket."""
     type: str = Field(..., description="Tipo de mensaje (ej: 'join_game', 'new_question')")
     payload: Optional[Any] = Field(default=None, description="Datos asociados al mensaje, varía según el tipo")
-
-class GameOverPayload(BaseModel):
-    """Payload para el mensaje 'game_over' enviado a cada jugador."""
-    podium: List[ScoreboardEntry] = Field(..., description="Los 3 mejores jugadores (o menos si hay menos jugadores, excluyendo al host)")
-    my_final_rank: Optional[int] = Field(default=None, description="El rango final específico de este jugador entre todos los jugadores (excluyendo host)")
-    my_final_score: Optional[int] = Field(default=None, description="La puntuación final específica de este jugador")
